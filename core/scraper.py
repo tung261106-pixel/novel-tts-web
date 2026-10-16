@@ -1,13 +1,23 @@
 # File: core/scraper.py
 import re
 from typing import Tuple, List, Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, quote
 import requests
 from bs4 import BeautifulSoup
 
+try:
+    from curl_cffi import requests as cffi_requests
+except ImportError:
+    cffi_requests = None
+
+try:
+    import cloudscraper
+except ImportError:
+    cloudscraper = None
+
 
 class NovelScraper:
-    """Bộ bóc tách nội dung truyện chữ, tìm link chuyển chương và chia nhỏ văn bản."""
+    """Bộ bóc tách nội dung truyện chữ vượt tường lửa 403 Forbidden trên Cloud."""
 
     HEADERS = {
         "User-Agent": (
@@ -15,22 +25,24 @@ class NovelScraper:
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/128.0.0.0 Safari/537.36"
         ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://www.google.com.vn/",
+        "Upgrade-Insecure-Requests": "1",
     }
 
     CONTENT_SELECTORS = [
-        "#chapter-c",            # TruyenFull
+        "#chapter-c",
         ".chapter-c",
-        "#vungdoc",              # TangThuVien / TruyenYY
-        ".box-chap",             # TangThuVien
-        "#chapter-content",      # Metruyenchu / Wordpress Novel
+        "#vungdoc",
+        ".box-chap",
+        "#chapter-content",
         ".chapter-content",
         "#content",
         ".entry-content",
         "article",
     ]
 
-    # Các mẫu dòng rác cần loại bỏ hoàn toàn
     JUNK_PATTERNS = [
         r"(?i)^\s*(chương\s+trước|chương\s+sau|chương\s+tiếp|mục\s+lục|báo\s+lỗi\s+chương|bình\s+luận)\s*$",
         r"(?i)^\s*(bản\s*dịch|dịch\s*ai|convert|\s|/|\|)+$",
@@ -41,28 +53,71 @@ class NovelScraper:
     ]
 
     @classmethod
-    def fetch_chapter(cls, url: str, timeout: int = 15) -> Tuple[str, List[str], Optional[str], Optional[str]]:
-        """
-        Tải trang web từ URL, trích xuất tiêu đề (Số chương + Tên chương),
-        các đoạn văn bản đã lọc sạch và link Chương trước / Chương tiếp.
-        """
-        response = requests.get(url, headers=cls.HEADERS, timeout=timeout)
-        response.raise_for_status()
-        response.encoding = response.apparent_encoding or "utf-8"
+    def _download_html(cls, url: str, timeout: int = 20) -> str:
+        """Tải HTML qua 4 lớp bảo vệ để không bị lỗi 403 Forbidden trên Render."""
+        # Lớp 1: Giả lập TLS trình duyệt Chrome bằng curl_cffi
+        if cffi_requests is not None:
+            for browser_ver in ["chrome120", "chrome110", "safari17_0"]:
+                try:
+                    resp = cffi_requests.get(
+                        url, headers=cls.HEADERS, impersonate=browser_ver, timeout=timeout
+                    )
+                    if resp.status_code == 200 and len(resp.text) > 500:
+                        return resp.text
+                except Exception:
+                    continue
 
-        soup = BeautifulSoup(response.text, "lxml")
+        # Lớp 2: Vượt Cloudflare bằng cloudscraper
+        if cloudscraper is not None:
+            try:
+                scraper = cloudscraper.create_scraper(
+                    browser={"browser": "chrome", "platform": "windows", "mobile": False}
+                )
+                resp = scraper.get(url, headers=cls.HEADERS, timeout=timeout)
+                if resp.status_code == 200 and len(resp.text) > 500:
+                    resp.encoding = resp.apparent_encoding or "utf-8"
+                    return resp.text
+            except Exception:
+                pass
 
-        # 1. Trích xuất link Chương trước & Chương sau TRƯỚC KHI xóa thẻ điều hướng
+        # Lớp 3: Requests tiêu chuẩn
+        try:
+            resp = requests.get(url, headers=cls.HEADERS, timeout=timeout)
+            if resp.status_code == 200 and len(resp.text) > 500:
+                resp.encoding = resp.apparent_encoding or "utf-8"
+                return resp.text
+        except Exception:
+            pass
+
+        # Lớp 4: Cổng Proxy dự phòng khi IP máy chủ đám mây bị chặn cứng
+        proxy_endpoints = [
+            f"https://api.allorigins.win/raw?url={quote(url, safe='')}",
+            f"https://api.codetabs.com/v1/proxy?quest={quote(url, safe='')}",
+        ]
+        for proxy_url in proxy_endpoints:
+            try:
+                resp = requests.get(proxy_url, timeout=timeout)
+                if resp.status_code == 200 and len(resp.text) > 500:
+                    resp.encoding = "utf-8"
+                    return resp.text
+            except Exception:
+                continue
+
+        raise ValueError(f"Không thể truy cập trang web (Lỗi 403 Forbidden) tại: {url}")
+
+    @classmethod
+    def fetch_chapter(cls, url: str, timeout: int = 20) -> Tuple[str, List[str], Optional[str], Optional[str]]:
+        """Tải trang web, trích xuất tiêu đề, văn bản sạch và link chuyển chương."""
+        html_text = cls._download_html(url, timeout=timeout)
+        soup = BeautifulSoup(html_text, "lxml")
+
         prev_url, next_url = cls._extract_nav_links(soup, url)
 
-        # 2. Xóa các thẻ script, menu, footer trước (giữ lại <header> để lấy Tên chương)
         for tag in soup(["script", "style", "nav", "footer", "iframe", "noscript", "aside", "form"]):
             tag.decompose()
 
-        # 3. Trích xuất đầy đủ Số chương và Tên chương (VD: "Chương 1050: Dương Đông Kích Tây")
         title = cls._extract_chapter_title(soup, url)
 
-        # 4. Xóa tiếp thẻ <header>, <button>, <h1> và các nút chuyển đổi "Bản Dịch / Dịch AI / Convert"
         for tag in soup(["header", "button", "h1"]):
             tag.decompose()
 
@@ -73,13 +128,11 @@ class NovelScraper:
         ):
             junk_div.decompose()
 
-        # Tìm và xóa trực tiếp các thẻ chứa chữ Bản Dịch / Dịch AI / Convert
         for el in soup.find_all(["span", "div", "a", "li"]):
             el_text = el.get_text(strip=True)
             if re.match(r"(?i)^(bản\s*dịch|dịch\s*ai|convert|bản\s*dịch\s*dịch\s*ai\s*convert)$", el_text):
                 el.decompose()
 
-        # 5. Tìm vùng chứa nội dung chính của truyện
         content_node = None
         for selector in cls.CONTENT_SELECTORS:
             node = soup.select_one(selector)
@@ -100,7 +153,6 @@ class NovelScraper:
         if not content_node:
             raise ValueError("Không tìm thấy nội dung văn bản trên trang web này.")
 
-        # Chèn ký tự xuống dòng sau các thẻ khối để các chữ không bị dính liền vào nhau
         for br in content_node.find_all("br"):
             br.replace_with("\n")
         for block_tag in content_node.find_all(["p", "div", "h2", "h3", "h4", "li"]):
@@ -110,11 +162,11 @@ class NovelScraper:
         cleaned_text = cls._clean_text(raw_text)
 
         if len(cleaned_text) < 50:
-            raise ValueError("Nội dung bóc tách được quá ngắn hoặc trang web yêu cầu JavaScript (SPA).")
+            raise ValueError("Nội dung bóc tách được quá ngắn.")
 
-        chunks = cls.split_into_chunks(cleaned_text, max_chars=300)
+        # Chia đoạn ~450 ký tự để giảm số lần chuyển bài, giúp phát mượt hơn trên di động
+        chunks = cls.split_into_chunks(cleaned_text, max_chars=450)
 
-        # 6. Chèn Số chương & Tên chương vào làm đoạn đầu tiên (chunk 0) để phần mềm đọc to ở đầu mỗi chap
         if chunks:
             first_chunk_lower = chunks[0].lower().strip()
             title_lower = title.lower().strip()
@@ -125,13 +177,7 @@ class NovelScraper:
 
     @classmethod
     def _extract_chapter_title(cls, soup: BeautifulSoup, url: str) -> str:
-        """
-        Trích xuất kết hợp cả Số chương và Tên chương.
-        Ví dụ: 'Chương 1050: Dương Đông Kích Tây'
-        """
-        # 1. Tìm số chương (VD: "Chương 1050")
         chap_num = ""
-        # Tìm trên các thẻ hiển thị số chương hoặc trong <title>
         if soup.title and soup.title.get_text(strip=True):
             m = re.search(r"(?i)(chương\s+\d+)", soup.title.get_text(strip=True))
             if m:
@@ -142,7 +188,6 @@ class NovelScraper:
             if m_url:
                 chap_num = f"Chương {m_url.group(1)}"
 
-        # 2. Tìm tên chương từ thẻ <h1> hoặc class tiêu đề chương
         chap_name = ""
         title_selectors = [
             "article h1",
@@ -162,9 +207,7 @@ class NovelScraper:
                     chap_name = text
                     break
 
-        # 3. Ghép Số chương và Tên chương
         if chap_name:
-            # Nếu trong chap_name đã có sẵn chữ "Chương X..."
             if re.search(r"(?i)^chương\s+\d+", chap_name):
                 return chap_name
             elif chap_num:
@@ -183,7 +226,6 @@ class NovelScraper:
 
     @classmethod
     def _extract_nav_links(cls, soup: BeautifulSoup, base_url: str) -> Tuple[Optional[str], Optional[str]]:
-        """Tìm đường dẫn Chương trước và Chương tiếp theo trên trang web."""
         prev_url: Optional[str] = None
         next_url: Optional[str] = None
 
@@ -243,7 +285,6 @@ class NovelScraper:
 
     @classmethod
     def _clean_text(cls, text: str) -> str:
-        """Làm sạch văn bản: xóa dòng thừa, cụm 'Bản DịchDịch AIConvert' và các nút điều hướng."""
         lines = text.splitlines()
         cleaned_lines = []
 
@@ -252,7 +293,6 @@ class NovelScraper:
             if not line:
                 continue
 
-            # Cắt bỏ cụm "Bản DịchDịch AIConvert" nếu bị dính ở đầu dòng
             line = re.sub(
                 r"(?i)^(?:bản\s*dịch\s*dịch\s*ai\s*convert|bản\s*dịch\s+dịch\s*ai|dịch\s*ai\s*convert)\s*",
                 "",
@@ -269,8 +309,7 @@ class NovelScraper:
         return "\n".join(cleaned_lines)
 
     @classmethod
-    def split_into_chunks(cls, text: str, max_chars: int = 300) -> List[str]:
-        """Chia văn bản thành các câu/đoạn nhỏ (~300 ký tự) dựa trên dấu kết thúc câu."""
+    def split_into_chunks(cls, text: str, max_chars: int = 450) -> List[str]:
         sentences = re.split(r"(?<=[.!?…])\s+|\n+", text)
         chunks: List[str] = []
         current_chunk = ""
