@@ -59,7 +59,6 @@
             position: relative;
         }
 
-        /* Lớp nền mờ khi mở menu Lịch sử trên điện thoại */
         .sidebar-backdrop {
             display: none;
             position: fixed;
@@ -180,7 +179,6 @@
             overflow: hidden;
         }
 
-        /* Thanh nhập URL */
         .url-bar {
             background-color: var(--bg-panel);
             padding: 8px;
@@ -236,7 +234,6 @@
             cursor: not-allowed;
         }
 
-        /* Thanh tiêu đề chương & Điều hướng */
         .header-bar {
             display: flex;
             justify-content: space-between;
@@ -290,7 +287,6 @@
             height: 15px;
         }
 
-        /* Khung đọc văn bản (Reading View) */
         .reading-view {
             flex: 1;
             background-color: var(--bg-panel);
@@ -317,7 +313,6 @@
             font-weight: 500;
         }
 
-        /* Thanh điều khiển Media */
         .media-bar {
             background-color: var(--bg-panel);
             border: 1px solid var(--border-color);
@@ -379,7 +374,6 @@
             max-width: 100%;
         }
 
-        /* ================= 3. TỐI ƯU RIÊNG CHO ĐIỆN THOẠI ================= */
         @media (max-width: 768px) {
             .sidebar {
                 position: fixed;
@@ -424,10 +418,8 @@
 </head>
 <body>
 
-    <!-- Lớp phủ mờ khi mở Sidebar trên điện thoại -->
     <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="toggleSidebar(false)"></div>
 
-    <!-- 1. SIDEBAR (LỊCH SỬ) -->
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <div class="logo">📚 Novel TTS</div>
@@ -447,9 +439,7 @@
         </select>
     </aside>
 
-    <!-- 2. KHU VỰC CHÍNH -->
     <main class="main-container">
-        <!-- Thanh nhập URL + Nút mở Lịch sử trên điện thoại -->
         <div class="url-bar">
             <button class="menu-toggle-btn" onclick="toggleSidebar(true)">☰ Lịch sử</button>
             <input
@@ -462,7 +452,6 @@
             <button id="fetchBtn" class="btn-primary" onclick="startScraping()">⬇ Tải</button>
         </div>
 
-        <!-- Thanh tiêu đề & Điều hướng chương -->
         <div class="header-bar">
             <div id="chapterTitle" class="chapter-title">Chưa tải chương truyện</div>
 
@@ -484,7 +473,6 @@
             </div>
         </div>
 
-        <!-- Khu vực đọc (Reading View) -->
         <div id="readingView" class="reading-view">
             <div class="chunk-item">
                 <b>Hướng dẫn sử dụng trên Điện thoại & Máy tính:</b><br><br>
@@ -494,7 +482,6 @@
             </div>
         </div>
 
-        <!-- Thanh điều khiển Media -->
         <div class="media-bar">
             <div class="media-row-top">
                 <button class="btn-media btn-play" onclick="playAudio()">▶ Play</button>
@@ -509,14 +496,14 @@
                 </select>
 
                 <div class="speed-group">
-                    <span id="speedLabel">1.15x</span>
+                    <span id="speedLabel">1.25x</span>
                     <input
                         type="range"
                         id="speedSlider"
                         min="0.8"
-                        max="1.5"
+                        max="1.6"
                         step="0.05"
-                        value="1.15"
+                        value="1.25"
                         oninput="onSpeedInput(this.value)"
                         onchange="onVoiceOrSpeedChange()"
                     />
@@ -537,15 +524,53 @@
         let prevChapterUrl = null;
         let nextChapterUrl = null;
         let playbackSessionId = 0;
+        let audioCtx = null;
 
+        const PRELOAD_AHEAD = 5;
         const LOCAL_HISTORY_KEY = "novel_tts_local_history";
         const audioPlayer = new Audio();
         audioPlayer.playsInline = true;
+        audioPlayer.preload = "auto";
         const preloadCache = new Map();
 
         window.addEventListener("DOMContentLoaded", () => {
             loadHistory();
+            setupMediaSession();
+            // Ping giữ máy chủ Render không ngủ mỗi 3 phút khi đang nghe
+            setInterval(() => {
+                if (isPlaying) fetch("/api/history").catch(() => {});
+            }, 180000);
         });
+
+        function unlockiOSAudio() {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!audioCtx && AudioContext) {
+                    audioCtx = new AudioContext();
+                }
+                if (audioCtx && audioCtx.state === "suspended") {
+                    audioCtx.resume();
+                }
+            } catch (e) {}
+        }
+
+        function setupMediaSession() {
+            if ("mediaSession" in navigator) {
+                navigator.mediaSession.setActionHandler("play", () => playAudio());
+                navigator.mediaSession.setActionHandler("pause", () => pauseAudio());
+                navigator.mediaSession.setActionHandler("previoustrack", () => goPrevChapter());
+                navigator.mediaSession.setActionHandler("nexttrack", () => goNextChapter());
+            }
+        }
+
+        function updateMediaSessionMetadata(title) {
+            if ("mediaSession" in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: title || "Đang đọc truyện",
+                    artist: "Novel TTS Reader",
+                });
+            }
+        }
 
         function toggleSidebar(open) {
             const sidebar = document.getElementById("sidebar");
@@ -578,7 +603,6 @@
             document.getElementById("statusLabel").innerText = text;
         }
 
-        // Lưu lịch sử vào bộ nhớ điện thoại để không bị mất khi Render ngủ
         function saveToLocalHistory(title, url) {
             let list = [];
             try {
@@ -595,6 +619,7 @@
         }
 
         async function startScraping(urlOverride = "") {
+            unlockiOSAudio();
             const urlInput = document.getElementById("urlInput");
             const targetUrl = (urlOverride || urlInput.value).trim();
 
@@ -630,6 +655,7 @@
                 }
 
                 document.getElementById("chapterTitle").innerText = data.title;
+                updateMediaSessionMetadata(data.title);
                 prevChapterUrl = data.prev_url;
                 nextChapterUrl = data.next_url;
                 document.getElementById("prevChapBtn").disabled = !prevChapterUrl;
@@ -684,6 +710,22 @@
             return `${index}_${voice}_${speed}`;
         }
 
+        async function fetchTTSWithRetry(text, voice, speed, retries = 3) {
+            const params = new URLSearchParams({ text, voice, speed });
+            for (let attempt = 1; attempt <= retries; attempt++) {
+                try {
+                    const res = await fetch(`/api/tts?${params.toString()}`);
+                    if (!res.ok) throw new Error("TTS HTTP " + res.status);
+                    const blob = await res.blob();
+                    if (blob.size < 100) throw new Error("Empty audio");
+                    return URL.createObjectURL(blob);
+                } catch (err) {
+                    if (attempt === retries) throw err;
+                    await new Promise((r) => setTimeout(r, 700 * attempt));
+                }
+            }
+        }
+
         function schedulePreload(index) {
             if (index < 0 || index >= chunks.length) return null;
             const key = getCacheKey(index);
@@ -691,19 +733,10 @@
             if (!preloadCache.has(key)) {
                 const voice = document.getElementById("voiceSelect").value;
                 const speed = parseFloat(document.getElementById("speedSlider").value).toFixed(2);
-                const params = new URLSearchParams({
-                    text: chunks[index],
-                    voice: voice,
-                    speed: speed,
+                const promise = fetchTTSWithRetry(chunks[index], voice, speed, 3).catch((err) => {
+                    preloadCache.delete(key);
+                    throw err;
                 });
-
-                const promise = fetch(`/api/tts?${params.toString()}`)
-                    .then((res) => {
-                        if (!res.ok) throw new Error("TTS API error");
-                        return res.blob();
-                    })
-                    .then((blob) => URL.createObjectURL(blob));
-
                 preloadCache.set(key, promise);
             }
             return preloadCache.get(key);
@@ -717,6 +750,7 @@
         }
 
         async function playAudio(startIndex = null) {
+            unlockiOSAudio();
             if (!chunks.length) {
                 alert("Vui lòng tải một chương truyện trước khi nhấn Play.");
                 return;
@@ -725,7 +759,7 @@
             if (isPlaying && isPaused && startIndex === null) {
                 isPaused = false;
                 audioPlayer.play();
-                setStatus(`Đoạn ${currentIndex + 1}/${chunks.length}`);
+                setStatus(`Đang đọc ${currentIndex + 1}/${chunks.length}`);
                 return;
             }
 
@@ -744,8 +778,9 @@
                 const idx = currentIndex;
 
                 const currentPromise = schedulePreload(idx);
-                schedulePreload(idx + 1);
-                schedulePreload(idx + 2);
+                for (let ahead = 1; ahead <= PRELOAD_AHEAD; ahead++) {
+                    schedulePreload(idx + ahead);
+                }
 
                 setStatus(`Chuẩn bị ${idx + 1}/${chunks.length}...`);
 
@@ -766,11 +801,29 @@
                     audioPlayer.src = audioUrl;
                     audioPlayer.onended = () => resolve();
                     audioPlayer.onerror = () => resolve();
-                    audioPlayer.play().catch(() => {
-                        setStatus("Bấm ▶ Play để tiếp tục");
-                        isPaused = true;
-                    });
+
+                    const playPromise = audioPlayer.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(() => {
+                            setTimeout(() => {
+                                if (!stopRequested && !isPaused) {
+                                    audioPlayer.play().catch(() => {
+                                        isPaused = true;
+                                        setStatus("Bấm ▶ Play để tiếp tục");
+                                    });
+                                }
+                            }, 300);
+                        });
+                    }
                 });
+
+                if (idx >= 2) {
+                    const oldKey = getCacheKey(idx - 2);
+                    if (preloadCache.has(oldKey)) {
+                        preloadCache.get(oldKey).then((u) => URL.revokeObjectURL(u)).catch(() => {});
+                        preloadCache.delete(oldKey);
+                    }
+                }
 
                 if (stopRequested || sessionId !== playbackSessionId) break;
                 currentIndex++;
@@ -785,7 +838,7 @@
                 const autoNext = document.getElementById("autoNextToggle").checked;
                 if (autoNext && nextChapterUrl) {
                     setStatus("Đang qua chương mới...");
-                    setTimeout(() => goNextChapter(), 1000);
+                    setTimeout(() => goNextChapter(), 600);
                 } else {
                     setStatus("Đã đọc xong chương!");
                 }
