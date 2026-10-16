@@ -1,0 +1,6 @@
+flask>=3.0.0
+gunicorn>=22.0.0
+edge-tts>=6.1.12
+beautifulsoup4>=4.12.3
+requests>=2.32.3
+lxml>=5.2.2
