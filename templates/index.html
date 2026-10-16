@@ -3,7 +3,7 @@
 <html lang="vi" data-theme="dark">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Novel TTS Reader - Trình Đọc & Nghe Truyện Chữ Tự Động</title>
     <style>
         :root[data-theme="dark"] {
@@ -42,18 +42,34 @@
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
             background-color: var(--bg-main);
             color: var(--text-primary);
             height: 100vh;
+            height: 100dvh; /* Chuẩn chiều cao động cho Safari iOS & Chrome Mobile */
             display: flex;
             overflow: hidden;
+            position: relative;
         }
 
-        /* ================= 1. SIDEBAR ================= */
+        /* Lớp nền mờ khi mở menu Lịch sử trên điện thoại */
+        .sidebar-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 998;
+        }
+
+        .sidebar-backdrop.show {
+            display: block;
+        }
+
+        /* ================= 1. SIDEBAR (LỊCH SỬ) ================= */
         .sidebar {
             width: 280px;
             min-width: 280px;
@@ -61,19 +77,38 @@
             border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
-            padding: 18px 15px;
+            padding: 16px 14px;
+            z-index: 999;
+            transition: transform 0.25s ease;
+        }
+
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
         }
 
         .logo {
-            font-size: 20px;
+            font-size: 19px;
             font-weight: 700;
-            margin-bottom: 16px;
+        }
+
+        .close-sidebar-btn {
+            display: none;
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 16px;
+            cursor: pointer;
         }
 
         .sidebar-title {
             font-size: 14px;
             font-weight: 600;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .history-list {
@@ -82,7 +117,7 @@
             background-color: var(--bg-panel);
             border-radius: 8px;
             padding: 8px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             border: 1px solid var(--border-color);
         }
 
@@ -93,12 +128,11 @@
             color: var(--text-primary);
             border: none;
             border-radius: 6px;
-            padding: 8px 10px;
+            padding: 9px 10px;
             margin-bottom: 6px;
             cursor: pointer;
             font-size: 13px;
             line-height: 1.4;
-            transition: background 0.15s;
         }
 
         .history-item:hover {
@@ -110,19 +144,15 @@
             color: var(--text-primary);
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            padding: 8px;
+            padding: 9px;
             cursor: pointer;
             font-size: 13px;
-            margin-bottom: 14px;
-        }
-
-        .clear-btn:hover {
-            background-color: var(--bg-history-hover);
+            margin-bottom: 12px;
         }
 
         .theme-label {
             font-size: 13px;
-            margin-bottom: 6px;
+            margin-bottom: 5px;
         }
 
         .select-box {
@@ -139,31 +169,48 @@
         /* ================= 2. KHU VỰC CHÍNH ================= */
         .main-container {
             flex: 1;
+            min-width: 0;
             display: flex;
             flex-direction: column;
-            padding: 15px 20px;
-            gap: 10px;
+            padding: 12px 16px;
+            gap: 8px;
             overflow: hidden;
         }
 
         /* Thanh nhập URL */
         .url-bar {
             background-color: var(--bg-panel);
-            padding: 10px 12px;
+            padding: 8px;
             border-radius: 8px;
             display: flex;
-            gap: 10px;
+            align-items: center;
+            gap: 8px;
             border: 1px solid var(--border-color);
         }
 
-        .url-input {
-            flex: 1;
+        .menu-toggle-btn {
+            display: none;
             background-color: var(--bg-input);
             color: var(--text-primary);
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            padding: 0 12px;
-            height: 40px;
+            height: 38px;
+            padding: 0 11px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .url-input {
+            flex: 1;
+            min-width: 0;
+            background-color: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0 10px;
+            height: 38px;
             font-size: 14px;
             outline: none;
         }
@@ -173,17 +220,12 @@
             color: #ffffff;
             border: none;
             border-radius: 6px;
-            padding: 0 16px;
-            height: 40px;
-            font-size: 14px;
+            padding: 0 14px;
+            height: 38px;
+            font-size: 13px;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.15s;
             white-space: nowrap;
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            background-color: var(--accent-blue-hover);
         }
 
         .btn-primary:disabled {
@@ -197,45 +239,52 @@
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 6px;
         }
 
         .chapter-title {
-            font-size: 17px;
+            font-size: 15px;
             font-weight: 700;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 440px;
+            max-width: 100%;
         }
 
         .nav-controls {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
+            flex-wrap: wrap;
+            width: 100%;
+            justify-content: space-between;
+        }
+
+        .nav-left, .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 6px;
             flex-wrap: wrap;
         }
 
         .btn-small {
             height: 32px;
-            padding: 0 12px;
-            font-size: 13px;
+            padding: 0 10px;
+            font-size: 12px;
         }
 
-        /* Công tắc Tự động qua chương */
         .switch-wrapper {
             display: flex;
             align-items: center;
-            gap: 6px;
-            font-size: 13px;
-            margin: 0 6px;
+            gap: 5px;
+            font-size: 12px;
             cursor: pointer;
+            user-select: none;
         }
 
         .switch-wrapper input {
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
+            width: 15px;
+            height: 15px;
         }
 
         /* Khung đọc văn bản (Reading View) */
@@ -244,22 +293,19 @@
             background-color: var(--bg-panel);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 20px 24px;
+            padding: 14px 16px;
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             font-size: 18px;
             line-height: 1.65;
         }
 
         .chunk-item {
             padding: 8px 10px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             border-radius: 6px;
             cursor: pointer;
-            transition: background-color 0.2s, color 0.2s;
-        }
-
-        .chunk-item:hover {
-            background-color: rgba(128, 128, 128, 0.12);
+            transition: background-color 0.15s;
         }
 
         .chunk-item.active-chunk {
@@ -273,18 +319,33 @@
             background-color: var(--bg-panel);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 10px 14px;
+            padding: 8px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .media-row-top {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .media-row-bottom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
             flex-wrap: wrap;
+            width: 100%;
         }
 
         .btn-media {
+            flex: 1;
             border: none;
             border-radius: 6px;
             height: 36px;
-            width: 92px;
             color: #ffffff;
             font-weight: 700;
             font-size: 13px;
@@ -292,34 +353,84 @@
         }
 
         .btn-play { background-color: #2ecc71; }
-        .btn-play:hover { background-color: #27ae60; }
-
         .btn-pause { background-color: #f39c12; }
-        .btn-pause:hover { background-color: #d68910; }
-
         .btn-stop { background-color: #e74c3c; }
-        .btn-stop:hover { background-color: #c0392b; }
 
         .speed-group {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 13px;
-            margin-left: 8px;
+            gap: 6px;
+            font-size: 12px;
+        }
+
+        .speed-group input[type="range"] {
+            width: 95px;
         }
 
         .status-text {
-            margin-left: auto;
-            font-size: 13px;
+            font-size: 12px;
             color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        /* ================= 3. TỐI ƯU RIÊNG CHO ĐIỆN THOẠI ================= */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                width: 82%;
+                max-width: 300px;
+                transform: translateX(-100%);
+                box-shadow: 4px 0 15px rgba(0, 0, 0, 0.5);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .close-sidebar-btn {
+                display: inline-block;
+            }
+
+            .menu-toggle-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .main-container {
+                padding: 8px 10px;
+                gap: 6px;
+            }
+
+            .reading-view {
+                padding: 12px;
+            }
+
+            .select-box {
+                padding: 6px 8px;
+                font-size: 12px;
+            }
         }
     </style>
 </head>
 <body>
 
-    <!-- 1. SIDEBAR -->
-    <aside class="sidebar">
-        <div class="logo">📚 Novel TTS Reader</div>
+    <!-- Lớp phủ mờ khi mở Sidebar trên điện thoại -->
+    <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="toggleSidebar(false)"></div>
+
+    <!-- 1. SIDEBAR (LỊCH SỬ) -->
+    <aside id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">📚 Novel TTS</div>
+            <button class="close-sidebar-btn" onclick="toggleSidebar(false)">✕</button>
+        </div>
+
         <div class="sidebar-title">Lịch sử đọc gần đây:</div>
         <div id="historyList" class="history-list"></div>
 
@@ -335,16 +446,17 @@
 
     <!-- 2. KHU VỰC CHÍNH -->
     <main class="main-container">
-        <!-- Thanh nhập URL -->
+        <!-- Thanh nhập URL + Nút mở Lịch sử trên điện thoại -->
         <div class="url-bar">
+            <button class="menu-toggle-btn" onclick="toggleSidebar(true)">☰ Lịch sử</button>
             <input
                 type="text"
                 id="urlInput"
                 class="url-input"
-                placeholder="Nhập URL chương truyện (VD: https://truyendich.space/...) rồi nhấn Bắt đầu tải"
+                placeholder="Dán link chương truyện vào đây..."
                 onkeydown="if(event.key === 'Enter') startScraping()"
             />
-            <button id="fetchBtn" class="btn-primary" onclick="startScraping()">⬇ Bắt đầu tải</button>
+            <button id="fetchBtn" class="btn-primary" onclick="startScraping()">⬇ Tải</button>
         </div>
 
         <!-- Thanh tiêu đề & Điều hướng chương -->
@@ -352,64 +464,67 @@
             <div id="chapterTitle" class="chapter-title">Chưa tải chương truyện</div>
 
             <div class="nav-controls">
-                <button id="prevChapBtn" class="btn-primary btn-small" disabled onclick="goPrevChapter()">⏮ Chương trước</button>
-                <button id="nextChapBtn" class="btn-primary btn-small" disabled onclick="goNextChapter()">Chương tiếp ⏭</button>
+                <div class="nav-left">
+                    <button id="prevChapBtn" class="btn-primary btn-small" disabled onclick="goPrevChapter()">⏮ Trước</button>
+                    <button id="nextChapBtn" class="btn-primary btn-small" disabled onclick="goNextChapter()">Tiếp ⏭</button>
+                    <label class="switch-wrapper">
+                        <input type="checkbox" id="autoNextToggle" checked />
+                        <span>Tự qua chương</span>
+                    </label>
+                </div>
 
-                <label class="switch-wrapper">
-                    <input type="checkbox" id="autoNextToggle" checked />
-                    <span>Tự động qua chương</span>
-                </label>
-
-                <span style="font-size: 13px;">Cỡ chữ:</span>
-                <button class="btn-primary btn-small" onclick="changeFontSize(-2)">A-</button>
-                <span id="fontSizeLabel" style="font-size: 13px; min-width: 38px; text-align: center;">18px</span>
-                <button class="btn-primary btn-small" onclick="changeFontSize(2)">A+</button>
+                <div class="nav-right">
+                    <button class="btn-primary btn-small" onclick="changeFontSize(-2)">A-</button>
+                    <span id="fontSizeLabel" style="font-size: 12px; min-width: 32px; text-align: center;">18px</span>
+                    <button class="btn-primary btn-small" onclick="changeFontSize(2)">A+</button>
+                </div>
             </div>
         </div>
 
         <!-- Khu vực đọc (Reading View) -->
         <div id="readingView" class="reading-view">
             <div class="chunk-item">
-                <b>Hướng dẫn sử dụng phiên bản Web:</b><br><br>
-                1. Dán đường dẫn (URL) của một chương truyện bất kỳ vào ô phía trên và nhấn <b>"⬇ Bắt đầu tải"</b>.<br>
-                2. Hệ thống sẽ tự động lọc sạch quảng cáo, đọc Số chương + Tên chương ở đầu mỗi chap và tự động cuộn theo giọng đọc.<br>
-                3. Nhấn <b>"⏮ Chương trước"</b>, <b>"Chương tiếp ⏭"</b> hoặc bật <b>"Tự động qua chương"</b> để nghe liên tục.<br>
-                4. Nhấp đúp (Double-click) vào bất kỳ đoạn văn nào để nhảy tới đọc ngay đoạn đó!
+                <b>Hướng dẫn sử dụng trên Điện thoại & Máy tính:</b><br><br>
+                1. Bấm nút <b>"☰ Lịch sử"</b> ở góc trên bên trái để chọn lại các chương đang đọc dở hoặc dán link mới vào ô tìm kiếm.<br>
+                2. Chạm trực tiếp vào bất kỳ đoạn văn nào trong khung này để đọc ngay từ đoạn đó.<br>
+                3. Khi bật <b>"Tự qua chương"</b>, máy sẽ tự động chuyển và đọc chương tiếp theo khi hết chương.
             </div>
         </div>
 
         <!-- Thanh điều khiển Media -->
         <div class="media-bar">
-            <button class="btn-media btn-play" onclick="playAudio()">▶ Play</button>
-            <button class="btn-media btn-pause" onclick="pauseAudio()">⏸ Pause</button>
-            <button class="btn-media btn-stop" onclick="stopAudio()">⏹ Stop</button>
-
-            <span style="font-size: 13px; margin-left: 8px;">Giọng đọc:</span>
-            <select id="voiceSelect" class="select-box" onchange="onVoiceOrSpeedChange()">
-                <option value="vi-VN-HoaiMyNeural">Nữ - Hoài My (Neural)</option>
-                <option value="vi-VN-NamMinhNeural">Nam - Nam Minh (Neural)</option>
-            </select>
-
-            <div class="speed-group">
-                <span id="speedLabel">Tốc độ: 1.00x</span>
-                <input
-                    type="range"
-                    id="speedSlider"
-                    min="0.8"
-                    max="1.5"
-                    step="0.05"
-                    value="1.0"
-                    oninput="onSpeedInput(this.value)"
-                    onchange="onVoiceOrSpeedChange()"
-                />
+            <div class="media-row-top">
+                <button class="btn-media btn-play" onclick="playAudio()">▶ Play</button>
+                <button class="btn-media btn-pause" onclick="pauseAudio()">⏸ Pause</button>
+                <button class="btn-media btn-stop" onclick="stopAudio()">⏹ Stop</button>
             </div>
 
-            <div id="statusLabel" class="status-text">Sẵn sàng</div>
+            <div class="media-row-bottom">
+                <select id="voiceSelect" class="select-box" onchange="onVoiceOrSpeedChange()">
+                    <option value="vi-VN-HoaiMyNeural">Nữ - Hoài My</option>
+                    <option value="vi-VN-NamMinhNeural">Nam - Nam Minh</option>
+                </select>
+
+                <div class="speed-group">
+                    <span id="speedLabel">1.00x</span>
+                    <input
+                        type="range"
+                        id="speedSlider"
+                        min="0.8"
+                        max="1.5"
+                        step="0.05"
+                        value="1.0"
+                        oninput="onSpeedInput(this.value)"
+                        onchange="onVoiceOrSpeedChange()"
+                    />
+                </div>
+
+                <div id="statusLabel" class="status-text">Sẵn sàng</div>
+            </div>
         </div>
     </main>
 
     <script>
-        // Trạng thái dữ liệu toàn cục
         let chunks = [];
         let currentIndex = 0;
         let isPlaying = false;
@@ -418,16 +533,29 @@
         let currentFontSize = 18;
         let prevChapterUrl = null;
         let nextChapterUrl = null;
-        let playbackSessionId = 0; // Ngăn xung đột luồng khi đổi chương/nhảy đoạn
+        let playbackSessionId = 0;
 
         const audioPlayer = new Audio();
-        const preloadCache = new Map(); // Lưu bộ đệm Preload: key -> Promise<ObjectURL>
+        audioPlayer.playsInline = true;
+        const preloadCache = new Map();
 
         window.addEventListener("DOMContentLoaded", () => {
             loadHistory();
         });
 
-        // ================= 1. QUẢN LÝ GIAO DIỆN & CỠ CHỮ =================
+        // Đóng/mở menu Lịch sử trên điện thoại
+        function toggleSidebar(open) {
+            const sidebar = document.getElementById("sidebar");
+            const backdrop = document.getElementById("sidebarBackdrop");
+            if (open) {
+                sidebar.classList.add("open");
+                backdrop.classList.add("show");
+            } else {
+                sidebar.classList.remove("open");
+                backdrop.classList.remove("show");
+            }
+        }
+
         function changeTheme(mode) {
             if (mode === "system") {
                 const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -438,7 +566,7 @@
         }
 
         function changeFontSize(delta) {
-            currentFontSize = Math.max(12, Math.min(32, currentFontSize + delta));
+            currentFontSize = Math.max(13, Math.min(32, currentFontSize + delta));
             document.getElementById("fontSizeLabel").innerText = currentFontSize + "px";
             document.getElementById("readingView").style.fontSize = currentFontSize + "px";
         }
@@ -447,7 +575,6 @@
             document.getElementById("statusLabel").innerText = text;
         }
 
-        // ================= 2. TẢI TRUYỆN & ĐIỀU HƯỚNG CHƯƠNG =================
         async function startScraping(urlOverride = "") {
             const urlInput = document.getElementById("urlInput");
             const targetUrl = (urlOverride || urlInput.value).trim();
@@ -460,15 +587,18 @@
                 urlInput.value = targetUrl;
             }
 
+            // Tự động đóng menu Lịch sử trên điện thoại sau khi chọn chương
+            toggleSidebar(false);
+
             stopAudio();
             clearPreloadCache();
 
             const fetchBtn = document.getElementById("fetchBtn");
             fetchBtn.disabled = true;
-            fetchBtn.innerText = "⏳ Đang tải...";
+            fetchBtn.innerText = "⏳...";
             document.getElementById("prevChapBtn").disabled = true;
             document.getElementById("nextChapBtn").disabled = true;
-            setStatus("Đang bóc tách nội dung truyện...");
+            setStatus("Đang tải truyện...");
 
             try {
                 const res = await fetch("/api/scrape", {
@@ -482,19 +612,16 @@
                     throw new Error(data.error || "Không thể tải chương truyện");
                 }
 
-                // Cập nhật tiêu đề và nút chuyển chương
                 document.getElementById("chapterTitle").innerText = data.title;
                 prevChapterUrl = data.prev_url;
                 nextChapterUrl = data.next_url;
                 document.getElementById("prevChapBtn").disabled = !prevChapterUrl;
                 document.getElementById("nextChapBtn").disabled = !nextChapterUrl;
 
-                // Hiển thị các đoạn văn bản
                 chunks = data.chunks || [];
                 renderChunks();
                 renderHistory(data.history || []);
 
-                // Tự động phát ngay từ đoạn đầu tiên (Số chương + Tên chương)
                 playAudio(0);
             } catch (err) {
                 setStatus("Lỗi tải truyện");
@@ -503,7 +630,7 @@
                 document.getElementById("nextChapBtn").disabled = !nextChapterUrl;
             } finally {
                 fetchBtn.disabled = false;
-                fetchBtn.innerText = "⬇ Bắt đầu tải";
+                fetchBtn.innerText = "⬇ Tải";
             }
         }
 
@@ -515,7 +642,12 @@
                 div.className = "chunk-item";
                 div.id = `chunk_${idx}`;
                 div.innerText = text;
-                div.ondblclick = () => playAudio(idx);
+                // Hỗ trợ chạm 1 lần trên điện thoại hoặc click để đọc ngay đoạn đó
+                div.onclick = () => {
+                    const selection = window.getSelection();
+                    if (selection && selection.toString().length > 0) return;
+                    playAudio(idx);
+                };
                 view.appendChild(div);
             });
         }
@@ -528,7 +660,6 @@
             if (nextChapterUrl) startScraping(nextChapterUrl);
         }
 
-        // ================= 3. XỬ LÝ TTS, PRELOAD & PHÁT ÂM THANH =================
         function getCacheKey(index) {
             const voice = document.getElementById("voiceSelect").value;
             const speed = parseFloat(document.getElementById("speedSlider").value).toFixed(2);
@@ -573,11 +704,10 @@
                 return;
             }
 
-            // Nếu đang tạm dừng và không yêu cầu nhảy đoạn -> Tiếp tục phát
             if (isPlaying && isPaused && startIndex === null) {
                 isPaused = false;
                 audioPlayer.play();
-                setStatus(`Đang đọc đoạn ${currentIndex + 1}/${chunks.length}...`);
+                setStatus(`Đoạn ${currentIndex + 1}/${chunks.length}`);
                 return;
             }
 
@@ -595,18 +725,16 @@
             while (currentIndex < chunks.length && !stopRequested && sessionId === playbackSessionId) {
                 const idx = currentIndex;
 
-                // Tải đoạn hiện tại và Preload trước 2 đoạn kế tiếp
                 const currentPromise = schedulePreload(idx);
                 schedulePreload(idx + 1);
                 schedulePreload(idx + 2);
 
-                setStatus(`Đang chuẩn bị âm thanh đoạn ${idx + 1}/${chunks.length}...`);
+                setStatus(`Chuẩn bị ${idx + 1}/${chunks.length}...`);
 
                 let audioUrl;
                 try {
                     audioUrl = await currentPromise;
                 } catch (e) {
-                    setStatus(`Lỗi tạo âm thanh đoạn ${idx + 1}, đang bỏ qua...`);
                     currentIndex++;
                     continue;
                 }
@@ -614,21 +742,22 @@
                 if (stopRequested || sessionId !== playbackSessionId) break;
 
                 highlightAndScroll(idx);
-                setStatus(`Đang đọc đoạn ${idx + 1}/${chunks.length}...`);
+                setStatus(`Đang đọc ${idx + 1}/${chunks.length}`);
 
-                // Phát file âm thanh và chờ tới khi đọc xong đoạn
                 await new Promise((resolve) => {
                     audioPlayer.src = audioUrl;
                     audioPlayer.onended = () => resolve();
                     audioPlayer.onerror = () => resolve();
-                    audioPlayer.play().catch(() => resolve());
+                    audioPlayer.play().catch(() => {
+                        setStatus("Bấm ▶ Play để tiếp tục");
+                        isPaused = true;
+                    });
                 });
 
                 if (stopRequested || sessionId !== playbackSessionId) break;
                 currentIndex++;
             }
 
-            // Khi đọc xong toàn bộ chương
             if (!stopRequested && sessionId === playbackSessionId && currentIndex >= chunks.length) {
                 isPlaying = false;
                 isPaused = false;
@@ -637,10 +766,10 @@
 
                 const autoNext = document.getElementById("autoNextToggle").checked;
                 if (autoNext && nextChapterUrl) {
-                    setStatus("Đang tự động chuyển sang chương tiếp theo...");
+                    setStatus("Đang qua chương mới...");
                     setTimeout(() => goNextChapter(), 1000);
                 } else {
-                    setStatus("Đã đọc xong chương truyện!");
+                    setStatus("Đã đọc xong chương!");
                 }
             }
         }
@@ -649,7 +778,7 @@
             if (isPlaying && !isPaused) {
                 audioPlayer.pause();
                 isPaused = true;
-                setStatus("Đã tạm dừng.");
+                setStatus("Đã tạm dừng");
             }
         }
 
@@ -661,7 +790,7 @@
             audioPlayer.pause();
             audioPlayer.removeAttribute("src");
             clearHighlight();
-            setStatus("Đã dừng đọc.");
+            setStatus("Đã dừng");
         }
 
         function highlightAndScroll(idx) {
@@ -680,14 +809,13 @@
         }
 
         function onSpeedInput(val) {
-            document.getElementById("speedLabel").innerText = `Tốc độ: ${parseFloat(val).toFixed(2)}x`;
+            document.getElementById("speedLabel").innerText = `${parseFloat(val).toFixed(2)}x`;
         }
 
         function onVoiceOrSpeedChange() {
             clearPreloadCache();
         }
 
-        // ================= 4. QUẢN LÝ SIDEBAR LỊCH SỬ =================
         async function loadHistory() {
             try {
                 const res = await fetch("/api/history");
