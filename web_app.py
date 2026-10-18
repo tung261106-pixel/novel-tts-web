@@ -12,14 +12,14 @@ app = Flask(__name__)
 
 
 def _speed_to_rate_str(speed: float) -> str:
-    """Chuyển hệ số tốc độ (0.5 - 2.0) thành chuỗi phần trăm cho edge-tts (VD: +25%)."""
+    """Chuyển hệ số tốc độ (0.5 - 2.0) thành chuỗi phần trăm cho edge-tts."""
     percent = int(round((float(speed) - 1.0) * 100))
     return f"+{percent}%" if percent >= 0 else f"{percent}%"
 
 
 async def _synthesize_audio_bytes(text: str, voice: str, rate_str: str) -> bytes:
     """Chuyển văn bản thành luồng dữ liệu âm thanh MP3 trực tiếp trên RAM."""
-    communicate = edge_tts.Communicate(text=text, voice=voice, rate_str=rate_str) if False else edge_tts.Communicate(text=text, voice=voice, rate=rate_str)
+    communicate = edge_tts.Communicate(text=text, voice=voice, rate=rate_str)
     audio_buffer = io.BytesIO()
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":
@@ -29,7 +29,7 @@ async def _synthesize_audio_bytes(text: str, voice: str, rate_str: str) -> bytes
 
 @app.route("/")
 def index():
-    """Trang chủ hiển thị giao diện đọc truyện iOS."""
+    """Trang chủ hiển thị giao diện đọc truyện."""
     return render_template("index.html")
 
 
@@ -44,7 +44,7 @@ def api_scrape():
 
     try:
         title, chunks, prev_url, next_url = NovelScraper.fetch_chapter(url)
-        history = HistoryManager.add_entry(title, url)
+        history = HistoryManager.add_entry(title, url, total_chunks=len(chunks))
         return jsonify({
             "title": title,
             "url": url,
@@ -86,6 +86,28 @@ def api_get_history():
     return jsonify(HistoryManager.load_history())
 
 
+@app.route("/api/history/sync", methods=["POST"])
+def api_sync_history():
+    """API gộp lịch sử 2 chiều giữa trình duyệt (Laptop/Phone) và Server."""
+    data = request.get_json(silent=True) or {}
+    client_entries = data.get("history", [])
+    merged = HistoryManager.sync_entries(client_entries)
+    return jsonify(merged)
+
+
+@app.route("/api/history/progress", methods=["POST"])
+def api_update_progress():
+    """API lưu vị trí đoạn văn (chunk_index) đang đọc dở."""
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    chunk_index = int(data.get("chunk_index") or 0)
+    total_chunks = int(data.get("total_chunks") or 0)
+    if not url:
+        return jsonify({"error": "Missing url"}), 400
+    updated = HistoryManager.update_progress(url, chunk_index, total_chunks)
+    return jsonify(updated)
+
+
 @app.route("/api/history/clear", methods=["POST"])
 def api_clear_history():
     """API xóa toàn bộ lịch sử đọc truyện."""
@@ -94,6 +116,5 @@ def api_clear_history():
 
 
 if __name__ == "__main__":
-    # Tự động lấy cổng PORT từ Render (nếu chạy trên máy tính thì mặc định là 5000)
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
