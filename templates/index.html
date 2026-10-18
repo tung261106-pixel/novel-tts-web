@@ -73,8 +73,8 @@
 
         /* ================= 1. SIDEBAR (LỊCH SỬ) ================= */
         .sidebar {
-            width: 280px;
-            min-width: 280px;
+            width: 290px;
+            min-width: 290px;
             background-color: var(--bg-sidebar);
             border-right: 1px solid var(--border-color);
             display: flex;
@@ -88,7 +88,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 14px;
+            margin-bottom: 12px;
         }
 
         .logo {
@@ -107,10 +107,26 @@
             cursor: pointer;
         }
 
-        .sidebar-title {
-            font-size: 14px;
-            font-weight: 600;
+        .sidebar-subbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 8px;
+        }
+
+        .sidebar-title {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .sync-btn {
+            background-color: var(--accent-blue);
+            color: #ffffff;
+            border: none;
+            border-radius: 5px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
         }
 
         .history-list {
@@ -134,11 +150,18 @@
             margin-bottom: 6px;
             cursor: pointer;
             font-size: 13px;
-            line-height: 1.4;
+            line-height: 1.45;
         }
 
         .history-item:hover {
             background-color: var(--bg-history-hover);
+        }
+
+        .progress-badge {
+            display: inline-block;
+            color: #f39c12;
+            font-weight: 600;
+            font-size: 12px;
         }
 
         .clear-btn {
@@ -426,7 +449,11 @@
             <button class="close-sidebar-btn" onclick="toggleSidebar(false)">✕</button>
         </div>
 
-        <div class="sidebar-title">Lịch sử đọc gần đây:</div>
+        <div class="sidebar-subbar">
+            <span class="sidebar-title">Lịch sử (Đã đồng bộ):</span>
+            <button id="syncBtn" class="sync-btn" onclick="syncHistoryWithServer()">🔄 Đồng bộ</button>
+        </div>
+
         <div id="historyList" class="history-list"></div>
 
         <button class="clear-btn" onclick="clearHistory()">🗑 Xóa lịch sử</button>
@@ -475,10 +502,9 @@
 
         <div id="readingView" class="reading-view">
             <div class="chunk-item">
-                <b>Hướng dẫn sử dụng trên Điện thoại & Máy tính:</b><br><br>
-                1. Bấm nút <b>"☰ Lịch sử"</b> ở góc trên bên trái để chọn lại các chương đang đọc dở hoặc dán link mới vào ô tìm kiếm.<br>
-                2. Chạm trực tiếp vào bất kỳ đoạn văn nào trong khung này để đọc ngay từ đoạn đó.<br>
-                3. Khi bật <b>"Tự qua chương"</b>, máy sẽ tự động chuyển và đọc chương tiếp theo khi hết chương.
+                <b>Hướng dẫn đồng bộ giữa Điện thoại & Laptop:</b><br><br>
+                1. Lịch sử đọc và vị trí câu đang nghe dở sẽ <b>tự động đồng bộ 2 chiều</b> giữa Laptop và Điện thoại.<br>
+                2. Khi chuyển từ Điện thoại sang Laptop (hoặc ngược lại), bạn chỉ cần mở mục <b>"Lịch sử"</b> (hoặc bấm nút <b>"🔄 Đồng bộ"</b>) rồi bấm vào chương đang đọc để nghe tiếp đúng câu đang dừng!
             </div>
         </div>
 
@@ -517,6 +543,7 @@
     <script>
         let chunks = [];
         let currentIndex = 0;
+        let currentChapterUrl = "";
         let isPlaying = false;
         let isPaused = false;
         let stopRequested = false;
@@ -534,12 +561,15 @@
         const preloadCache = new Map();
 
         window.addEventListener("DOMContentLoaded", () => {
-            loadHistory();
+            syncHistoryWithServer();
             setupMediaSession();
-            // Ping giữ máy chủ Render không ngủ mỗi 3 phút khi đang nghe
+            // Tự động đồng bộ ngầm mỗi 60 giây hoặc khi người dùng mở lại tab
             setInterval(() => {
-                if (isPlaying) fetch("/api/history").catch(() => {});
-            }, 180000);
+                syncHistoryWithServer(true);
+            }, 60000);
+            document.addEventListener("visibilitychange", () => {
+                if (!document.hidden) syncHistoryWithServer(true);
+            });
         });
 
         function unlockiOSAudio() {
@@ -578,6 +608,7 @@
             if (open) {
                 sidebar.classList.add("open");
                 backdrop.classList.add("show");
+                syncHistoryWithServer(true);
             } else {
                 sidebar.classList.remove("open");
                 backdrop.classList.remove("show");
@@ -603,22 +634,95 @@
             document.getElementById("statusLabel").innerText = text;
         }
 
-        function saveToLocalHistory(title, url) {
-            let list = [];
+        // ================= ĐỒNG BỘ LỊCH SỬ 2 CHIỀU (LAPTOP <-> SERVER <-> PHONE) =================
+        function getLocalHistory() {
             try {
-                list = JSON.parse(localStorage.getItem(LOCAL_HISTORY_KEY) || "[]");
+                return JSON.parse(localStorage.getItem(LOCAL_HISTORY_KEY) || "[]");
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function setLocalHistory(list) {
+            try {
+                localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(list.slice(0, 30)));
             } catch (e) {}
+        }
+
+        function updateLocalEntry(title, url, chunkIdx = 0, totalChunks = 0) {
+            let list = getLocalHistory();
+            const existing = list.find((item) => item.url === url);
+            const savedChunk = chunkIdx > 0 ? chunkIdx : (existing ? existing.chunk_index || 0 : 0);
+            const savedTotal = totalChunks > 0 ? totalChunks : (existing ? existing.total_chunks || 0 : 0);
+
             list = list.filter((item) => item.url !== url);
             const now = new Date();
             const pad = (n) => String(n).padStart(2, "0");
             const timestamp = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-            list.unshift({ title, url, timestamp });
-            list = list.slice(0, 30);
-            localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(list));
+
+            list.unshift({
+                title: title || (existing ? existing.title : url),
+                url: url,
+                timestamp: timestamp,
+                updated_at: Date.now() / 1000,
+                chunk_index: savedChunk,
+                total_chunks: savedTotal,
+            });
+            setLocalHistory(list);
             return list;
         }
 
-        async function startScraping(urlOverride = "") {
+        async function syncHistoryWithServer(silent = false) {
+            const syncBtn = document.getElementById("syncBtn");
+            if (!silent && syncBtn) syncBtn.innerText = "⏳...";
+
+            const localList = getLocalHistory();
+            try {
+                const res = await fetch("/api/history/sync", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ history: localList }),
+                });
+                if (res.ok) {
+                    const mergedList = await res.json();
+                    setLocalHistory(mergedList);
+                    renderHistory(mergedList);
+                } else {
+                    renderHistory(localList);
+                }
+            } catch (e) {
+                renderHistory(localList);
+            } finally {
+                if (!silent && syncBtn) syncBtn.innerText = "🔄 Đồng bộ";
+            }
+        }
+
+        async function syncReadingProgress(idx) {
+            if (!currentChapterUrl || !chunks.length) return;
+            const currentTitle = document.getElementById("chapterTitle").innerText;
+            const localList = updateLocalEntry(currentTitle, currentChapterUrl, idx, chunks.length);
+            renderHistory(localList);
+
+            try {
+                const res = await fetch("/api/history/progress", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        url: currentChapterUrl,
+                        chunk_index: idx,
+                        total_chunks: chunks.length,
+                    }),
+                });
+                if (res.ok) {
+                    const serverList = await res.json();
+                    setLocalHistory(serverList);
+                    renderHistory(serverList);
+                }
+            } catch (e) {}
+        }
+
+        // ================= TẢI CHƯƠNG TRUYỆN =================
+        async function startScraping(urlOverride = "", resumeChunkIndex = 0) {
             unlockiOSAudio();
             const urlInput = document.getElementById("urlInput");
             const targetUrl = (urlOverride || urlInput.value).trim();
@@ -654,6 +758,7 @@
                     throw new Error(data.error || "Không thể tải chương truyện");
                 }
 
+                currentChapterUrl = targetUrl;
                 document.getElementById("chapterTitle").innerText = data.title;
                 updateMediaSessionMetadata(data.title);
                 prevChapterUrl = data.prev_url;
@@ -664,10 +769,10 @@
                 chunks = data.chunks || [];
                 renderChunks();
 
-                const mergedHistory = saveToLocalHistory(data.title, targetUrl);
-                renderHistory(mergedHistory);
+                updateLocalEntry(data.title, targetUrl, resumeChunkIndex, chunks.length);
+                await syncHistoryWithServer(true);
 
-                playAudio(0);
+                playAudio(resumeChunkIndex);
             } catch (err) {
                 setStatus("Lỗi tải truyện");
                 alert("Chi tiết lỗi:\n" + err.message);
@@ -697,11 +802,11 @@
         }
 
         function goPrevChapter() {
-            if (prevChapterUrl) startScraping(prevChapterUrl);
+            if (prevChapterUrl) startScraping(prevChapterUrl, 0);
         }
 
         function goNextChapter() {
-            if (nextChapterUrl) startScraping(nextChapterUrl);
+            if (nextChapterUrl) startScraping(nextChapterUrl, 0);
         }
 
         function getCacheKey(index) {
@@ -797,6 +902,11 @@
                 highlightAndScroll(idx);
                 setStatus(`Đang đọc ${idx + 1}/${chunks.length}`);
 
+                // Tự động đồng bộ vị trí câu đang đọc lên Server mỗi 3 câu
+                if (idx % 3 === 0 || idx === 0) {
+                    syncReadingProgress(idx);
+                }
+
                 await new Promise((resolve) => {
                     audioPlayer.src = audioUrl;
                     audioPlayer.onended = () => resolve();
@@ -834,6 +944,7 @@
                 isPaused = false;
                 currentIndex = 0;
                 clearHighlight();
+                syncReadingProgress(0);
 
                 const autoNext = document.getElementById("autoNextToggle").checked;
                 if (autoNext && nextChapterUrl) {
@@ -850,6 +961,8 @@
                 audioPlayer.pause();
                 isPaused = true;
                 setStatus("Đã tạm dừng");
+                // Lưu ngay vị trí câu vừa bấm Pause để máy kia mở lên đọc tiếp đúng chỗ
+                syncReadingProgress(currentIndex);
             }
         }
 
@@ -887,30 +1000,10 @@
             clearPreloadCache();
         }
 
-        async function loadHistory() {
-            let localList = [];
-            try {
-                localList = JSON.parse(localStorage.getItem(LOCAL_HISTORY_KEY) || "[]");
-            } catch (e) {}
-
-            if (localList.length > 0) {
-                renderHistory(localList);
-                return;
-            }
-
-            try {
-                const res = await fetch("/api/history");
-                const serverList = await res.json();
-                renderHistory(serverList);
-            } catch (e) {
-                renderHistory([]);
-            }
-        }
-
         function renderHistory(list) {
             const container = document.getElementById("historyList");
             container.innerHTML = "";
-            if (!list.length) {
+            if (!list || !list.length) {
                 container.innerHTML = `<div style="color: gray; text-align: center; padding: 12px; font-size: 13px;">Chưa có lịch sử đọc.</div>`;
                 return;
             }
@@ -918,14 +1011,24 @@
                 const btn = document.createElement("button");
                 btn.className = "history-item";
                 const shortTitle = item.title.length > 34 ? item.title.substring(0, 31) + "..." : item.title;
-                btn.innerHTML = `📖 <b>${shortTitle}</b><br>🕒 ${item.timestamp}`;
-                btn.onclick = () => startScraping(item.url);
+                const chunkIdx = parseInt(item.chunk_index || 0, 10);
+                const totalChunks = parseInt(item.total_chunks || 0, 10);
+
+                let progressHtml = "";
+                if (chunkIdx > 0) {
+                    progressHtml = totalChunks > 0
+                        ? `<br><span class="progress-badge">▶ Nghe tiếp câu ${chunkIdx + 1}/${totalChunks}</span>`
+                        : `<br><span class="progress-badge">▶ Nghe tiếp câu ${chunkIdx + 1}</span>`;
+                }
+
+                btn.innerHTML = `📖 <b>${shortTitle}</b><br>🕒 ${item.timestamp || ""}${progressHtml}`;
+                btn.onclick = () => startScraping(item.url, chunkIdx);
                 container.appendChild(btn);
             });
         }
 
         async function clearHistory() {
-            if (!confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử đọc?")) return;
+            if (!confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử đọc trên cả các thiết bị?")) return;
             localStorage.removeItem(LOCAL_HISTORY_KEY);
             await fetch("/api/history/clear", { method: "POST" }).catch(() => {});
             renderHistory([]);
