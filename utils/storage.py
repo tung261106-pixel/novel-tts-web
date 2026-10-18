@@ -1,19 +1,20 @@
 # File: utils/storage.py
 import json
 import os
+import time
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Any
 
 HISTORY_FILE = "history.json"
 MAX_HISTORY_ITEMS = 30
 
 
 class HistoryManager:
-    """Quản lý lịch sử đọc truyện lưu trữ dưới dạng file JSON."""
+    """Quản lý và đồng bộ lịch sử đọc truyện 2 chiều giữa các thiết bị."""
 
     @staticmethod
-    def load_history() -> List[Dict[str, str]]:
-        """Đọc danh sách lịch sử từ file JSON."""
+    def load_history() -> List[Dict[str, Any]]:
+        """Đọc danh sách lịch sử từ file JSON trên Server."""
         if not os.path.exists(HISTORY_FILE):
             return []
         try:
@@ -24,30 +25,103 @@ class HistoryManager:
             return []
 
     @staticmethod
-    def add_entry(title: str, url: str) -> List[Dict[str, str]]:
-        """
-        Thêm một chương truyện mới vào đầu lịch sử.
-        Nếu URL đã tồn tại, cập nhật lại thời gian và đưa lên đầu danh sách.
-        """
+    def save_history(history: List[Dict[str, Any]]) -> None:
+        """Ghi danh sách lịch sử xuống file JSON."""
+        try:
+            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+                json.dump(history[:MAX_HISTORY_ITEMS], f, ensure_ascii=False, indent=4)
+        except OSError as e:
+            print(f"[Storage Error] Không thể lưu lịch sử: {e}")
+
+    @staticmethod
+    def add_entry(title: str, url: str, total_chunks: int = 0) -> List[Dict[str, Any]]:
+        """Thêm hoặc cập nhật chương truyện lên đầu lịch sử."""
         history = HistoryManager.load_history()
-        # Loại bỏ bản ghi trùng URL cũ (nếu có)
+        url = url.strip()
+
+        # Giữ lại tiến độ câu đang đọc nếu chương này đã có trong lịch sử
+        existing_chunk = 0
+        for item in history:
+            if item.get("url") == url:
+                existing_chunk = item.get("chunk_index", 0)
+                break
+
         history = [item for item in history if item.get("url") != url]
 
         new_entry = {
             "title": title.strip() or url,
-            "url": url.strip(),
-            "timestamp": datetime.now().strftime("%d/%m/%Y %H:%M")
+            "url": url,
+            "timestamp": datetime.now().strftime("%d/%m/%Y %H:%M"),
+            "updated_at": time.time(),
+            "chunk_index": existing_chunk,
+            "total_chunks": total_chunks,
         }
         history.insert(0, new_entry)
         history = history[:MAX_HISTORY_ITEMS]
-
-        try:
-            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-                json.dump(history, f, ensure_ascii=False, indent=4)
-        except OSError as e:
-            print(f"[Storage Error] Không thể lưu lịch sử: {e}")
-
+        HistoryManager.save_history(history)
         return history
+
+    @staticmethod
+    def update_progress(url: str, chunk_index: int, total_chunks: int = 0) -> List[Dict[str, Any]]:
+        """Cập nhật vị trí câu (chunk) đang đọc dở để thiết bị khác đọc tiếp."""
+        history = HistoryManager.load_history()
+        url = url.strip()
+        for item in history:
+            if item.get("url") == url:
+                item["chunk_index"] = max(0, int(chunk_index))
+                if total_chunks > 0:
+                    item["total_chunks"] = int(total_chunks)
+                item["updated_at"] = time.time()
+                item["timestamp"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                break
+        # Sắp xếp chương vừa nghe lên đầu
+        history.sort(key=lambda x: float(x.get("updated_at", 0)), reverse=True)
+        HistoryManager.save_history(history)
+        return history
+
+    @staticmethod
+    def sync_entries(client_entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Hợp nhất (Merge) lịch sử từ thiết bị (Laptop/Điện thoại) với Server.
+        Bản ghi nào có thời gian cập nhật (updated_at) mới hơn sẽ được ưu tiên giữ lại.
+        """
+        server_entries = HistoryManager.load_history()
+        merged_map: Dict[str, Dict[str, Any]] = {}
+
+        for item in server_entries:
+            url = (item.get("url") or "").strip()
+            if url:
+                merged_map[url] = item
+
+        if isinstance(client_entries, list):
+            for c_item in client_entries:
+                if not isinstance(c_item, dict):
+                    continue
+                url = (c_item.get("url") or "").strip()
+                if not url:
+                    continue
+
+                c_time = float(c_item.get("updated_at") or 0)
+                if url not in merged_map:
+                    merged_map[url] = {
+                        "title": c_item.get("title", url),
+                        "url": url,
+                        "timestamp": c_item.get("timestamp", ""),
+                        "updated_at": c_time,
+                        "chunk_index": int(c_item.get("chunk_index") or 0),
+                        "total_chunks": int(c_item.get("total_chunks") or 0),
+                    }
+                else:
+                    s_time = float(merged_map[url].get("updated_at") or 0)
+                    if c_time > s_time:
+                        merged_map[url] = c_item
+
+        merged_list = list(merged_map.values())
+        merged_list.sort(key=lambda x: float(x.get("updated_at") or 0), reverse=True)
+        merged_list = merged_list[:MAX_HISTORY_ITEMS]
+
+        HistoryManager.save_history(merged_list)
+        return merged_list
 
     @staticmethod
     def clear_history() -> None:
