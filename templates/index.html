@@ -91,17 +91,6 @@
             transition: background-color 0.25s ease, color 0.25s ease;
         }
 
-        svg {
-            width: 17px;
-            height: 17px;
-            stroke: currentColor;
-            stroke-width: 2;
-            stroke-linecap: round;
-            stroke-linejoin: round;
-            fill: none;
-            flex-shrink: 0;
-        }
-
         .sidebar-backdrop, .modal-backdrop {
             display: none;
             position: fixed;
@@ -392,7 +381,6 @@
             white-space: nowrap;
         }
 
-        /* Thanh tiêu đề chương & Thanh tính năng mở rộng */
         .chapter-toolbar {
             background-color: var(--bg-surface);
             border: 1px solid var(--border-subtle);
@@ -468,19 +456,20 @@
 
         .toggle-input {
             appearance: none;
-            width: 32px;
-            height: 18px;
+            width: 34px;
+            height: 19px;
             background-color: var(--bg-input);
             border: 1px solid var(--border-subtle);
             border-radius: 99px;
             position: relative;
             cursor: pointer;
+            flex-shrink: 0;
         }
 
         .toggle-input::after {
             content: "";
-            width: 12px;
-            height: 12px;
+            width: 13px;
+            height: 13px;
             background-color: var(--text-secondary);
             border-radius: 50%;
             position: absolute;
@@ -491,11 +480,12 @@
 
         .toggle-input:checked {
             background-color: var(--accent-primary);
+            border-color: var(--accent-primary);
         }
 
         .toggle-input:checked::after {
             background-color: #ffffff;
-            transform: translateX(14px);
+            transform: translateX(15px);
         }
 
         .font-pill-group {
@@ -672,16 +662,16 @@
             box-shadow: 0 0 8px #10b981;
         }
 
-        /* ================= MODALS (HẸN GIỜ, NHẠC NỀN, TỪ ĐIỂN & AI) ================= */
+        /* ================= MODALS ================= */
         .modal-box {
             background-color: var(--bg-surface);
             border: 1px solid var(--border-subtle);
             border-radius: 16px;
-            width: 92%;
-            max-width: 480px;
+            width: 94%;
+            max-width: 510px;
             padding: 20px;
-            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6);
-            max-height: 85vh;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.65);
+            max-height: 88vh;
             overflow-y: auto;
             color: var(--text-primary);
         }
@@ -696,7 +686,7 @@
         }
 
         .modal-title {
-            font-size: 16px;
+            font-size: 15.5px;
             font-weight: 700;
             display: flex;
             align-items: center;
@@ -748,25 +738,34 @@
             color: var(--text-secondary);
         }
 
+        .setting-card-highlight {
+            background-color: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 11px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
         .dict-input-row {
             display: flex;
             gap: 6px;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .dict-input {
             flex: 1;
+            min-width: 0;
             background-color: var(--bg-input);
             border: 1px solid var(--border-subtle);
             color: var(--text-primary);
             border-radius: 8px;
             padding: 8px 10px;
-            font-size: 13px;
+            font-size: 12.5px;
             outline: none;
         }
 
         .dict-list {
-            max-height: 150px;
+            max-height: 130px;
             overflow-y: auto;
             background-color: var(--bg-input);
             border: 1px solid var(--border-subtle);
@@ -781,11 +780,20 @@
             align-items: center;
             padding: 6px 8px;
             border-bottom: 1px solid var(--border-subtle);
-            font-size: 12.5px;
+            font-size: 12px;
         }
 
         .dict-item:last-child {
             border-bottom: none;
+        }
+
+        .key-badge {
+            background-color: var(--accent-soft);
+            color: var(--accent-primary);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 6px;
         }
 
         @media (max-width: 768px) {
@@ -894,7 +902,7 @@
                 </div>
             </div>
 
-            <!-- Hàng nút 4 Tính năng mới: Hẹn giờ, Nhạc nền, Từ điển & AI, Xuất MP3 -->
+            <!-- Hàng nút 4 Tính năng: Hẹn giờ, Nhạc nền, Cài đặt AI & Từ điển, Xuất MP3 -->
             <div class="toolbar-features">
                 <div style="display:flex; gap:6px; flex-wrap:wrap;">
                     <button id="sleepTimerBtn" class="btn-secondary" onclick="openModal('sleepModal')">
@@ -906,7 +914,7 @@
                     </button>
 
                     <button id="dictBtn" class="btn-secondary active-feature" onclick="openModal('dictModal')">
-                        🧠 <span>Từ điển & Sửa dấu AI</span>
+                        🧠 <span id="aiStatusBtnLabel">AI Ngữ cảnh & Từ điển</span>
                     </button>
                 </div>
 
@@ -923,11 +931,9 @@
         <!-- Trang đọc truyện -->
         <div id="readingView" class="reading-view">
             <div class="chunk-item">
-                <b>✨ Đã nâng cấp 4 tính năng mới:</b><br><br>
-                • <b>🌙 Hẹn giờ đi ngủ:</b> Tự động giảm dần âm lượng và dừng đọc sau 15–60 phút hoặc khi hết chương hiện tại.<br>
-                • <b>🎵 Nhạc nền Tu Tiên / Huyền Huyễn:</b> 4 thể loại âm thanh không gian (Cổ Phong Tiên Hiệp, Huyền Huyễn Không Gian, Mưa Đêm Cổ Tự, Lofi Tĩnh Tâm) phát song song cùng giọng đọc.<br>
-                • <b>🧠 Từ điển & Sửa dấu theo Ngữ cảnh:</b> Tự động sửa từ viết tắt, chuẩn hóa dấu câu bị lỗi convert dựa trên ngữ cảnh câu và hỗ trợ làm mượt bằng AI.<br>
-                • <b>📥 Tải MP3:</b> Xuất toàn bộ chương truyện đang đọc thành 1 file Audiobook `.mp3` duy nhất về máy.
+                <b>✨ Hệ thống Kiểm tra Ngữ cảnh & Sửa dấu AI Tự động:</b><br><br>
+                • <b>Bật/Tắt cố định:</b> Vào mục <b>"🧠 AI Ngữ cảnh & Từ điển"</b> để gạt công tắc bật tự động. Khi bật, mọi chương truyện tải về (hoặc khi tự qua chương mới) đều được AI tự động kiểm tra ngữ cảnh và sửa dấu câu ngầm mà không làm trễ tốc độ đọc.<br>
+                • <b>Xoay vòng nhiều API Key:</b> Hỗ trợ thêm nhiều Gemini API Key cùng lúc. Khi Key #1 chạm giới hạn phút, hệ thống tự động chuyển sang Key #2, #3.
             </div>
         </div>
 
@@ -970,7 +976,7 @@
         </div>
     </main>
 
-    <!-- ================= MODAL 1: HẸN GIỜ ĐI NGỦ (SLEEP TIMER) ================= -->
+    <!-- ================= MODAL 1: HẸN GIỜ ĐI NGỦ ================= -->
     <div id="sleepModal" class="modal-backdrop" onclick="if(event.target===this) closeModal('sleepModal')">
         <div class="modal-box">
             <div class="modal-header">
@@ -1006,7 +1012,7 @@
         </div>
     </div>
 
-    <!-- ================= MODAL 2: NHẠC NỀN THEO THỂ LOẠI (AMBIENT BGM) ================= -->
+    <!-- ================= MODAL 2: NHẠC NỀN THEO THỂ LOẠI ================= -->
     <div id="bgmModal" class="modal-backdrop" onclick="if(event.target===this) closeModal('bgmModal')">
         <div class="modal-box">
             <div class="modal-header">
@@ -1053,45 +1059,65 @@
         </div>
     </div>
 
-    <!-- ================= MODAL 3: TỪ ĐIỂN PHÁT ÂM & SỬA DẤU THEO NGỮ CẢNH ================= -->
+    <!-- ================= MODAL 3: CÀI ĐẶT AI CỐ ĐỊNH, QUẢN LÝ NHIỀU API KEY & TỪ ĐIỂN ================= -->
     <div id="dictModal" class="modal-backdrop" onclick="if(event.target===this) closeModal('dictModal')">
         <div class="modal-box">
             <div class="modal-header">
-                <div class="modal-title">🧠 Từ điển & Sửa dấu theo Ngữ cảnh</div>
+                <div class="modal-title">🧠 Cài đặt Sửa dấu AI & Từ điển</div>
                 <button class="modal-close" onclick="closeModal('dictModal')">✕</button>
             </div>
 
-            <label class="toggle-label" style="margin-bottom:12px; display:flex; justify-content:space-between;">
-                <span><b>Tự động chuẩn hóa dấu câu & ngữ cảnh (NLP):</b><br><small style="color:var(--text-muted)">Sửa dấu phẩy/chấm câu sai và cụm từ lỗi dấu khi tải chương</small></span>
-                <input type="checkbox" id="contextPunctToggle" class="toggle-input" checked />
-            </label>
+            <!-- 1. Công tắc Bật/Tắt cố định cho mọi chương -->
+            <div class="setting-card-highlight">
+                <label class="toggle-label" style="display:flex; justify-content:space-between; width:100%; margin-bottom:10px;">
+                    <span>
+                        <b style="color:var(--text-primary); font-size:13px;">✨ Tự động sửa dấu & ngữ cảnh bằng AI (Mọi chương)</b><br>
+                        <small style="color:var(--text-muted)">Khi bật, mỗi chương tải về sẽ tự động được AI đọc hiểu ngữ cảnh và sửa lỗi dấu ngầm</small>
+                    </span>
+                    <input type="checkbox" id="autoAIPolishToggle" class="toggle-input" onchange="onToggleAutoAIPolish(this.checked)" />
+                </label>
 
-            <div style="font-size:12.5px; font-weight:600; margin-bottom:6px;">1. Từ điển sửa phát âm tùy chỉnh:</div>
-            <div class="dict-input-row">
-                <input type="text" id="dictWrongInput" class="dict-input" placeholder="Từ gốc (VD: ko, vs)" />
-                <input type="text" id="dictRightInput" class="dict-input" placeholder="Đọc thành (VD: không, với)" />
-                <button class="btn-fetch" style="height:34px; padding:0 12px;" onclick="addDictEntry()">+ Thêm</button>
+                <label class="toggle-label" style="display:flex; justify-content:space-between; width:100%; padding-top:8px; border-top:1px solid var(--border-subtle);">
+                    <span>
+                        <b style="color:var(--text-primary); font-size:12.5px;">⚡ Lọc dấu câu cơ bản tức thì (NLP Offline)</b><br>
+                        <small style="color:var(--text-muted)">Sửa nhanh dấu chấm/phẩy lặp và khoảng trắng bị dính ngay khi mở chương</small>
+                    </span>
+                    <input type="checkbox" id="contextPunctToggle" class="toggle-input" checked />
+                </label>
             </div>
 
-            <div id="dictListContainer" class="dict-list"></div>
+            <!-- 2. Danh sách quản lý nhiều Gemini API Key (Xoay vòng tự động) -->
+            <div style="margin-bottom:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span style="font-size:12.5px; font-weight:700;">🔑 Danh sách Gemini API Key (Tự xoay vòng):</span>
+                    <span id="apiKeyCountBadge" class="key-badge">0 Key</span>
+                </div>
 
-            <div style="padding-top:10px; border-top:1px solid var(--border-subtle);">
-                <div style="font-size:12.5px; font-weight:600; margin-bottom:6px;">2. Kiểm tra Ngữ cảnh chuyên sâu bằng Gemini AI (Tùy chọn):</div>
                 <div class="dict-input-row">
                     <input
-                        type="password"
-                        id="geminiApiKeyInput"
+                        type="text"
+                        id="newApiKeyInput"
                         class="dict-input"
-                        placeholder="Dán Gemini API Key (nếu muốn dùng AI sửa sâu)..."
-                        onchange="saveGeminiKey(this.value)"
+                        placeholder="Dán 1 hoặc nhiều API Key (cách nhau dấu phẩy)..."
                     />
-                    <button id="aiPolishBtn" class="btn-secondary" style="height:36px;" onclick="runAIPolishCurrentChapter()">
-                        ✨ AI Sửa chương này
-                    </button>
+                    <button class="btn-fetch" style="height:35px; padding:0 12px;" onclick="addApiKeys()">+ Thêm Key</button>
                 </div>
-                <div style="font-size:11px; color:var(--text-muted); line-height:1.4;">
-                    * AI sẽ đọc hiểu ngữ cảnh cả câu để sửa dấu câu và lỗi chính tả convert mà giữ nguyên 100% tên chiêu thức, cảnh giới Hán Việt.
+
+                <div id="apiKeyListContainer" class="dict-list" style="max-height:115px;"></div>
+                <div style="font-size:11px; color:var(--text-muted); line-height:1.35;">
+                    💡 <b>Mẹo:</b> Nên tạo 2–3 Key ở các Project khác nhau trên Google AI Studio. Khi Key #1 hết lượt phút, hệ thống tự động đổi sang Key #2, #3.
                 </div>
+            </div>
+
+            <!-- 3. Từ điển sửa lỗi phát âm cá nhân -->
+            <div style="padding-top:10px; border-top:1px solid var(--border-subtle);">
+                <div style="font-size:12.5px; font-weight:700; margin-bottom:6px;">📖 Từ điển sửa phát âm tùy chỉnh:</div>
+                <div class="dict-input-row">
+                    <input type="text" id="dictWrongInput" class="dict-input" placeholder="Từ gốc (VD: ko, vs)" />
+                    <input type="text" id="dictRightInput" class="dict-input" placeholder="Đọc thành (VD: không, với)" />
+                    <button class="btn-secondary" style="height:35px; padding:0 12px;" onclick="addDictEntry()">+ Thêm từ</button>
+                </div>
+                <div id="dictListContainer" class="dict-list" style="max-height:115px; margin-bottom:0;"></div>
             </div>
         </div>
     </div>
@@ -1107,14 +1133,16 @@
         let prevChapterUrl = null;
         let nextChapterUrl = null;
         let playbackSessionId = 0;
+        let scrapeSessionId = 0;
+        let currentKeyRotationIndex = 0;
         let audioCtx = null;
 
-        // Trạng thái Hẹn giờ (Sleep Timer)
-        let sleepTimerMode = 0; // 0, 'end_of_chapter', hoặc số phút
+        // Trạng thái Hẹn giờ
+        let sleepTimerMode = 0;
         let sleepRemainingSeconds = 0;
         let sleepIntervalId = null;
 
-        // Trạng thái Nhạc nền (Procedural Web Audio BGM)
+        // Trạng thái Nhạc nền
         let currentBGMMode = "off";
         let bgmMasterGain = null;
         let bgmIntervalId = null;
@@ -1126,7 +1154,8 @@
         const LOCAL_HISTORY_KEY = "novel_tts_local_history";
         const LOCAL_THEME_KEY = "novel_tts_theme";
         const LOCAL_DICT_KEY = "novel_tts_custom_dict";
-        const LOCAL_GEMINI_KEY = "novel_tts_gemini_key";
+        const LOCAL_API_KEYS_LIST = "novel_tts_gemini_keys_list";
+        const LOCAL_AUTO_AI_KEY = "novel_tts_auto_ai_enabled";
 
         const DEFAULT_DICT = {
             "ko": "không",
@@ -1146,7 +1175,13 @@
 
         window.addEventListener("DOMContentLoaded", () => {
             changeTheme(localStorage.getItem(LOCAL_THEME_KEY) || "dark");
-            document.getElementById("geminiApiKeyInput").value = localStorage.getItem(LOCAL_GEMINI_KEY) || "";
+
+            // Khôi phục trạng thái Bật/Tắt cố định của AI Ngữ cảnh
+            const savedAutoAI = localStorage.getItem(LOCAL_AUTO_AI_KEY) === "true";
+            document.getElementById("autoAIPolishToggle").checked = savedAutoAI;
+            updateAIButtonBadge();
+
+            renderApiKeyList();
             renderDictList();
             syncHistoryWithServer();
             setupMediaSession();
@@ -1157,15 +1192,188 @@
             });
         });
 
-        // ================= QUẢN LÝ MODAL =================
-        function openModal(id) {
-            document.getElementById(id).classList.add("show");
-        }
-        function closeModal(id) {
-            document.getElementById(id).classList.remove("show");
+        function openModal(id) { document.getElementById(id).classList.add("show"); }
+        function closeModal(id) { document.getElementById(id).classList.remove("show"); }
+
+        // ================= QUẢN LÝ NHIỀU API KEY & BẬT/TẮT AI CỐ ĐỊNH =================
+        function getApiKeysList() {
+            try {
+                const raw = localStorage.getItem(LOCAL_API_KEYS_LIST);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) return parsed;
+                }
+                // Tương thích ngược nếu trước đó người dùng đã lưu 1 key đơn lẻ
+                const legacyKey = localStorage.getItem("novel_tts_gemini_key");
+                if (legacyKey && legacyKey.trim()) {
+                    const initial = [legacyKey.trim()];
+                    localStorage.setItem(LOCAL_API_KEYS_LIST, JSON.stringify(initial));
+                    return initial;
+                }
+            } catch (e) {}
+            return [];
         }
 
-        // ================= TÍNH NĂNG 1: HẸN GIỜ ĐI NGỦ (SLEEP TIMER) =================
+        function saveApiKeysList(list) {
+            localStorage.setItem(LOCAL_API_KEYS_LIST, JSON.stringify(list));
+            renderApiKeyList();
+            updateAIButtonBadge();
+        }
+
+        function maskApiKey(key) {
+            if (key.length <= 12) return key;
+            return `${key.substring(0, 7)}••••••••${key.substring(key.length - 4)}`;
+        }
+
+        function renderApiKeyList() {
+            const container = document.getElementById("apiKeyListContainer");
+            const badge = document.getElementById("apiKeyCountBadge");
+            const keys = getApiKeysList();
+            badge.innerText = `${keys.length} Key`;
+            container.innerHTML = "";
+
+            if (!keys.length) {
+                container.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:10px;font-size:12px;">Chưa có API Key nào. Hãy thêm ít nhất 1 Key để bật AI tự động.</div>`;
+                return;
+            }
+
+            keys.forEach((k, idx) => {
+                const row = document.createElement("div");
+                row.className = "dict-item";
+                const isCurrent = idx === (currentKeyRotationIndex % keys.length);
+                row.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span class="key-badge">Key #${idx + 1}</span>
+                        <span style="font-family:monospace;font-size:12px;">${maskApiKey(k)}</span>
+                        ${isCurrent ? `<span style="color:#10b981;font-size:11px;font-weight:600;">● Đang ưu tiên</span>` : ""}
+                    </div>
+                    <button style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-weight:700" onclick="removeApiKey(${idx})" title="Xóa Key này">✕</button>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function addApiKeys() {
+            const input = document.getElementById("newApiKeyInput");
+            const rawText = input.value.trim();
+            if (!rawText) return;
+
+            // Cho phép dán 1 hoặc nhiều Key cùng lúc (ngăn cách bởi dấu phẩy, khoảng trắng hoặc xuống dòng)
+            const splitKeys = rawText.split(/[\s,;]+/).map((s) => s.trim()).filter((s) => s.length > 10);
+            if (!splitKeys.length) {
+                alert("API Key không hợp lệ!");
+                return;
+            }
+
+            const currentList = getApiKeysList();
+            splitKeys.forEach((k) => {
+                if (!currentList.includes(k)) currentList.push(k);
+            });
+
+            saveApiKeysList(currentList);
+            input.value = "";
+
+            // Nếu thêm Key lần đầu tiên, tự động bật luôn công tắc AI cố định cho tiện
+            const toggle = document.getElementById("autoAIPolishToggle");
+            if (!toggle.checked) {
+                toggle.checked = true;
+                onToggleAutoAIPolish(true);
+            }
+        }
+
+        function removeApiKey(index) {
+            const list = getApiKeysList();
+            list.splice(index, 1);
+            saveApiKeysList(list);
+        }
+
+        function onToggleAutoAIPolish(enabled) {
+            if (enabled && getApiKeysList().length === 0) {
+                alert("Bạn hãy thêm ít nhất 1 Gemini API Key ở khung bên dưới để hệ thống có thể tự động sửa dấu bằng AI nhé!");
+            }
+            localStorage.setItem(LOCAL_AUTO_AI_KEY, enabled ? "true" : "false");
+            updateAIButtonBadge();
+
+            // Nếu người dùng vừa bật công tắc khi đang có sẵn chương truyện -> Chạy AI làm mượt luôn
+            if (enabled && chunks.length > 0) {
+                triggerAutoAIPolishBackground(scrapeSessionId);
+            }
+        }
+
+        function updateAIButtonBadge() {
+            const enabled = document.getElementById("autoAIPolishToggle").checked;
+            const keysCount = getApiKeysList().length;
+            const btn = document.getElementById("dictBtn");
+            const label = document.getElementById("aiStatusBtnLabel");
+
+            if (enabled && keysCount > 0) {
+                btn.classList.add("active-feature");
+                label.innerText = `AI Ngữ cảnh: BẬT (${keysCount} Key)`;
+            } else if (enabled && keysCount === 0) {
+                btn.classList.remove("active-feature");
+                label.innerText = `AI Ngữ cảnh: Thiếu Key`;
+            } else {
+                btn.classList.remove("active-feature");
+                label.innerText = `AI Ngữ cảnh: TẮT`;
+            }
+        }
+
+        // Chạy AI kiểm tra ngữ cảnh ngầm ngay khi tải chương mà không làm gián đoạn câu đang đọc
+        async function triggerAutoAIPolishBackground(activeScrapeId) {
+            const enabled = document.getElementById("autoAIPolishToggle").checked;
+            const keys = getApiKeysList();
+            if (!enabled || keys.length === 0 || !chunks.length) return;
+
+            const label = document.getElementById("aiStatusBtnLabel");
+            label.innerText = "✨ AI đang sửa dấu ngầm...";
+
+            try {
+                const res = await fetch("/api/ai-polish", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        chunks: chunks,
+                        api_keys: keys,
+                        start_key_index: currentKeyRotationIndex,
+                    }),
+                });
+                const data = await res.json();
+
+                // Nếu trong lúc chờ AI mà người dùng đã chuyển sang chương khác thì bỏ qua
+                if (activeScrapeId !== scrapeSessionId) return;
+
+                if (res.ok && Array.isArray(data.chunks) && data.chunks.length === chunks.length) {
+                    currentKeyRotationIndex = data.next_key_index || 0;
+                    renderApiKeyList();
+
+                    // Cập nhật các đoạn văn bản từ vị trí sau câu đang đọc trở đi để không làm khựng tiếng
+                    for (let i = 0; i < data.chunks.length; i++) {
+                        if (i !== currentIndex || !isPlaying) {
+                            chunks[i] = data.chunks[i];
+                            const domChunk = document.getElementById(`chunk_${i}`);
+                            if (domChunk) domChunk.innerText = data.chunks[i];
+                        }
+                    }
+
+                    // Xóa bộ đệm preload của các câu phía sau để nạp lại bằng bản văn bản đã được AI sửa dấu
+                    clearPreloadCache();
+                    for (let ahead = 1; ahead <= PRELOAD_AHEAD; ahead++) {
+                        schedulePreload(currentIndex + ahead);
+                    }
+
+                    const usedKeyNum = (data.used_key_index ?? 0) + 1;
+                    label.innerText = `✨ AI Đã sửa (Key #${usedKeyNum})`;
+                } else {
+                    label.innerText = `AI Ngữ cảnh: BẬT (${keys.length} Key)`;
+                }
+            } catch (e) {
+                if (activeScrapeId === scrapeSessionId) {
+                    label.innerText = `AI Ngữ cảnh: BẬT (${keys.length} Key)`;
+                }
+            }
+        }
+
+        // ================= TÍNH NĂNG 1: HẸN GIỜ ĐI NGỦ =================
         function setSleepTimer(mode) {
             if (sleepIntervalId) {
                 clearInterval(sleepIntervalId);
@@ -1191,7 +1399,6 @@
                     sleepRemainingSeconds--;
                     updateSleepTimerDisplay();
 
-                    // Tự động giảm dần âm lượng (Fade-out) trong 10 giây cuối
                     if (sleepRemainingSeconds <= 10 && sleepRemainingSeconds > 0) {
                         audioPlayer.volume = Math.max(0.1, sleepRemainingSeconds / 10);
                     }
@@ -1217,7 +1424,7 @@
             document.getElementById("sleepTimerLabel").innerText = `${m}:${String(s).padStart(2, "0")}`;
         }
 
-        // ================= TÍNH NĂNG 2: NHẠC NỀN TU TIÊN / HUYỀN HUYỄN (WEB AUDIO SYNTH) =================
+        // ================= TÍNH NĂNG 2: NHẠC NỀN TU TIÊN / HUYỀN HUYỄN =================
         function ensureAudioContext() {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             if (!audioCtx && AudioContext) {
@@ -1254,14 +1461,12 @@
             ensureAudioContext();
             if (!audioCtx) return;
 
-            // 1. Cổ Phong Tiên Hiệp: Đàn Cổ Cầm / Đàn Tranh gảy âm giai Ngũ Cung (Pentatonic)
             if (currentBGMMode === "tienhiep") {
                 const pentatonic = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25];
-                // Âm nền sáo/pad trầm nhẹ
                 const padOsc = audioCtx.createOscillator();
                 const padGain = audioCtx.createGain();
                 padOsc.type = "sine";
-                padOsc.frequency.value = 130.81; // C3
+                padOsc.frequency.value = 130.81;
                 padGain.gain.value = 0.08;
                 padOsc.connect(padGain);
                 padGain.connect(bgmMasterGain);
@@ -1276,11 +1481,9 @@
                     osc.type = "triangle";
                     const freq = pentatonic[Math.floor(Math.random() * pentatonic.length)];
                     osc.frequency.setValueAtTime(freq, now);
-
                     noteGain.gain.setValueAtTime(0.001, now);
                     noteGain.gain.linearRampToValueAtTime(0.18, now + 0.06);
                     noteGain.gain.exponentialRampToValueAtTime(0.0008, now + 3.2);
-
                     osc.connect(noteGain);
                     noteGain.connect(bgmMasterGain);
                     osc.start(now);
@@ -1288,10 +1491,7 @@
                 };
                 pluckNote();
                 bgmIntervalId = setInterval(pluckNote, 2400);
-            }
-
-            // 2. Không Gian Huyền Huyễn: Âm vũ trụ trầm hùng, huyền bí
-            else if (currentBGMMode === "huyenhuyen") {
+            } else if (currentBGMMode === "huyenhuyen") {
                 const freqs = [110.0, 164.81, 220.0, 277.18];
                 freqs.forEach((f, idx) => {
                     const osc = audioCtx.createOscillator();
@@ -1304,10 +1504,7 @@
                     osc.start();
                     bgmOscillators.push(osc);
                 });
-            }
-
-            // 3. Mưa Đêm Cổ Tự: Tiếng mưa rơi rả rích + Chuông chùa ngân xa
-            else if (currentBGMMode === "muadem") {
+            } else if (currentBGMMode === "muadem") {
                 const bufferSize = audioCtx.sampleRate * 3;
                 const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
                 const output = noiseBuffer.getChannelData(0);
@@ -1326,12 +1523,10 @@
                 const filter = audioCtx.createBiquadFilter();
                 filter.type = "lowpass";
                 filter.frequency.value = 950;
-
                 bgmNoiseNode.connect(filter);
                 filter.connect(bgmMasterGain);
                 bgmNoiseNode.start();
 
-                // Tiếng chuông thiền điểm nhẹ mỗi 7 giây
                 bgmIntervalId = setInterval(() => {
                     if (!isPlaying || isPaused || currentBGMMode !== "muadem") return;
                     const now = audioCtx.currentTime;
@@ -1347,15 +1542,12 @@
                     bell.start(now);
                     bell.stop(now + 4.6);
                 }, 7000);
-            }
-
-            // 4. Tĩnh Tâm Lofi: Hợp âm ấm áp thư giãn
-            else if (currentBGMMode === "lofi") {
+            } else if (currentBGMMode === "lofi") {
                 const chords = [
-                    [261.63, 329.63, 392.00, 493.88], // Cmaj7
-                    [220.00, 261.63, 329.63, 392.00], // Am7
-                    [174.61, 220.00, 261.63, 349.23], // Fmaj7
-                    [196.00, 246.94, 293.66, 392.00]  // G6
+                    [261.63, 329.63, 392.00, 493.88],
+                    [220.00, 261.63, 329.63, 392.00],
+                    [174.61, 220.00, 261.63, 349.23],
+                    [196.00, 246.94, 293.66, 392.00]
                 ];
                 let chordIdx = 0;
                 const playChord = () => {
@@ -1402,7 +1594,7 @@
             }
         }
 
-        // ================= TÍNH NĂNG 3: TỪ ĐIỂN PHÁT ÂM & AI NGỮ CẢNH =================
+        // ================= TÍNH NĂNG 3: TỪ ĐIỂN PHÁT ÂM =================
         function getCustomDict() {
             try {
                 const saved = localStorage.getItem(LOCAL_DICT_KEY);
@@ -1470,44 +1662,6 @@
             renderChunks();
         }
 
-        function saveGeminiKey(val) {
-            localStorage.setItem(LOCAL_GEMINI_KEY, val.trim());
-        }
-
-        async function runAIPolishCurrentChapter() {
-            if (!chunks.length) {
-                alert("Hãy tải một chương truyện trước khi dùng AI sửa ngữ cảnh!");
-                return;
-            }
-            const btn = document.getElementById("aiPolishBtn");
-            const apiKey = document.getElementById("geminiApiKeyInput").value.trim();
-            btn.disabled = true;
-            btn.innerText = "⏳ AI đang đọc ngữ cảnh...";
-
-            try {
-                const res = await fetch("/api/ai-polish", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ chunks: chunks, api_key: apiKey }),
-                });
-                const data = await res.json();
-                if (!res.ok || data.error) {
-                    throw new Error(data.error || "Lỗi gọi AI");
-                }
-                chunks = data.chunks;
-                clearPreloadCache();
-                renderChunks();
-                highlightAndScroll(currentIndex);
-                alert("✨ Đã kiểm tra ngữ cảnh và làm mượt toàn bộ dấu câu trong chương!");
-                closeModal("dictModal");
-            } catch (err) {
-                alert(err.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerText = "✨ AI Sửa chương này";
-            }
-        }
-
         // ================= TÍNH NĂNG 4: TẢI AUDIOBOOK MP3 =================
         async function exportChapterMP3() {
             if (!chunks.length) {
@@ -1557,7 +1711,7 @@
             }
         }
 
-        // ================= CÁC HÀM CỐT LÕI (TẢI TRUYỆN, ĐỒNG BỘ & PHÁT ÂM THANH) =================
+        // ================= CÁC HÀM CỐT LÕI =================
         async function pasteClipboard() {
             try {
                 const text = await navigator.clipboard.readText();
@@ -1721,6 +1875,7 @@
             stopAudio();
             clearPreloadCache();
 
+            const thisScrapeId = ++scrapeSessionId;
             const fetchBtn = document.getElementById("fetchBtn");
             fetchBtn.disabled = true;
             setStatus("Đang tải truyện...", false);
@@ -1757,7 +1912,11 @@
                 updateLocalEntry(data.title, targetUrl, resumeChunkIndex, chunks.length);
                 await syncHistoryWithServer(true);
 
+                // Phát ngay câu đầu tiên để người dùng không phải chờ
                 playAudio(resumeChunkIndex);
+
+                // Đồng thời nếu công tắc AI cố định đang BẬT -> Tự động chạy AI sửa dấu ngầm cho cả chương
+                triggerAutoAIPolishBackground(thisScrapeId);
             } catch (err) {
                 setStatus("Lỗi tải chương", false);
                 alert("Chi tiết lỗi:\n" + err.message);
@@ -1930,7 +2089,6 @@
                 updateProgressBar(chunks.length - 1);
                 syncReadingProgress(0);
 
-                // Kiểm tra nếu đang bật hẹn giờ "Hết chương này"
                 if (sleepTimerMode === "end_of_chapter") {
                     setSleepTimer(0);
                     setStatus("Đã dừng (Hết chương) 🌙", false);
