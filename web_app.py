@@ -36,7 +36,6 @@ class ContextualTextPolisher:
     2. Chuẩn hóa dấu câu & lỗi dấu tiếng Việt dựa trên ngữ cảnh cụm từ xung quanh.
     """
 
-    # Các cụm từ sai dấu phổ biến trong truyện dịch/convert (chỉ sửa khi khớp đúng ngữ cảnh cả cụm)
     CONTEXT_PHRASE_FIXES = [
         (r"\bxẩy\s+ra\b", "xảy ra"),
         (r"\bbổn\s+tọa\b", "bổn tọa"),
@@ -57,25 +56,22 @@ class ContextualTextPolisher:
 
         result = text
 
-        # 1. Sửa dấu câu và ngữ cảnh thông minh
         if enable_context_punct:
-            # Sửa các dấu chấm/phẩy lặp vô nghĩa trong bản convert (VD: ", ," hoặc ". ." -> ",")
             result = re.sub(r",\s*,+", ",", result)
             result = re.sub(r";\s*;+", ";", result)
-            result = re.sub(r"\.\s*\.(?!\.)", ".", result)  # Giữ nguyên dấu "..." (ba chấm)
+            result = re.sub(r"\.\s*\.(?!\.)", ".", result)
 
-            # Khoảng trắng bị dính sau dấu câu (tránh sửa nhầm số thập phân như 1.5 hoặc tên miền)
             result = re.sub(r"([,;:!?])([^\s\d\"'”’)])", r"\1 \2", result)
-            result = re.sub(r"(?<![\d])\.([A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ])", r". \1", result)
-
-            # Xóa khoảng trắng thừa trước dấu câu
+            result = re.sub(
+                r"(?<![\d])\.([A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ])",
+                r". \1",
+                result,
+            )
             result = re.sub(r"\s+([,.;:!?])", r"\1", result)
 
-            # Sửa các cụm từ sai dấu khi khớp ngữ cảnh từ đi kèm
             for pattern, replacement in cls.CONTEXT_PHRASE_FIXES:
                 result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
 
-        # 2. Áp dụng Từ điển phát âm tùy chỉnh (Chỉ thay thế khi là từ độc lập, không cắt ngang từ khác)
         if custom_dict and isinstance(custom_dict, dict):
             for wrong_word, right_word in custom_dict.items():
                 w = wrong_word.strip()
@@ -136,47 +132,88 @@ def api_scrape():
 @app.route("/api/ai-polish", methods=["POST"])
 def api_ai_polish():
     """
-    API sử dụng AI (Gemini 2.5 Flash) để kiểm tra ngữ cảnh và sửa lỗi dấu câu / dấu thanh
-    cho các đoạn văn bản bị lỗi convert nặng mà không làm thay đổi cốt truyện hay từ Hán Việt.
+    API kiểm tra ngữ cảnh và sửa lỗi dấu câu / dấu thanh bằng AI.
+    Hỗ trợ nhận danh sách nhiều API Key (Multi-Key Rotation) và tự động đổi sang Key tiếp theo
+    hoặc đổi model dự phòng nếu một Key bị hết hạn mức (429).
     """
     data = request.get_json(silent=True) or {}
     chunks = data.get("chunks") or []
-    api_key = (data.get("api_key") or os.environ.get("GEMINI_API_KEY") or "").strip()
+    start_key_index = int(data.get("start_key_index") or 0)
+
+    # Thu thập danh sách API Key từ giao diện người dùng + biến môi trường trên Render (nếu có)
+    raw_keys = data.get("api_keys") or []
+    if isinstance(raw_keys, str):
+        raw_keys = [raw_keys]
+    api_keys = [k.strip() for k in raw_keys if isinstance(k, str) and k.strip()]
+
+    env_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
+    if env_key and env_key not in api_keys:
+        api_keys.append(env_key)
 
     if not chunks:
         return jsonify({"error": "Chưa có nội dung chương để xử lý."}), 400
 
-    if not api_key:
+    if not api_keys:
         return jsonify({
-            "error": "Vui lòng nhập Gemini API Key miễn phí trong mục Từ điển & AI (hoặc cài biến môi trường GEMINI_API_KEY trên Render)."
+            "error": "Chưa có API Key! Vui lòng thêm ít nhất 1 Gemini API Key trong mục 'Từ điển & Sửa dấu AI'."
         }), 400
 
     prompt = (
         "Bạn là biên tập viên tiểu thuyết tiên hiệp/huyền huyễn tiếng Việt. "
-        "Hãy kiểm tra ngữ cảnh từng câu dưới đây và CHỈ sửa những chỗ bị lỗi dấu câu (dấu phẩy, chấm câu đặt sai chỗ) "
-        "hoặc lỗi chính tả/dấu thanh tiếng Việt hiển nhiên do quá trình convert. "
+        "Hãy kiểm tra ngữ cảnh từng câu dưới đây và CHỈ sửa những chỗ bị lỗi dấu câu (dấu phẩy, chấm câu đặt sai chỗ làm đứt câu) "
+        "hoặc lỗi chính tả/dấu thanh tiếng Việt hiển nhiên do quá trình dịch/convert. "
         "TUYỆT ĐỐI giữ nguyên tên riêng, cảnh giới, chiêu thức Hán Việt, số lượng phần tử trong mảng JSON và không tóm tắt nội dung. "
         "Trả về kết quả dưới dạng một mảng JSON (JSON array of strings) khớp chính xác số lượng đoạn đầu vào:\n\n"
         + json.dumps(chunks, ensure_ascii=False)
     )
 
-    try:
-        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1},
-        }
-        resp = requests.post(gemini_url, json=payload, timeout=45)
-        resp.raise_for_status()
-        res_json = resp.json()
-        raw_output = res_json["candidates"][0]["content"]["parts"][0]["text"]
-        polished_chunks = json.loads(raw_output)
+    models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash"]
+    num_keys = len(api_keys)
+    last_error = ""
 
-        if isinstance(polished_chunks, list) and len(polished_chunks) == len(chunks):
-            return jsonify({"chunks": polished_chunks})
-        return jsonify({"error": "Kết quả AI trả về không khớp định dạng đoạn, giữ nguyên văn bản gốc."}), 500
-    except Exception as e:
-        return jsonify({"error": f"Lỗi kết nối AI: {e}"}), 500
+    # Xoay vòng qua tất cả các API Key trong danh sách
+    for offset in range(num_keys):
+        key_idx = (start_key_index + offset) % num_keys
+        current_key = api_keys[key_idx]
+
+        for model_name in models_to_try:
+            try:
+                gemini_url = (
+                    f"https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"{model_name}:generateContent?key={current_key}"
+                )
+                payload = {
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "responseMimeType": "application/json",
+                        "temperature": 0.1,
+                    },
+                }
+                resp = requests.post(gemini_url, json=payload, timeout=40)
+
+                if resp.status_code == 200:
+                    res_json = resp.json()
+                    raw_output = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                    polished_chunks = json.loads(raw_output)
+
+                    if isinstance(polished_chunks, list) and len(polished_chunks) == len(chunks):
+                        return jsonify({
+                            "chunks": polished_chunks,
+                            "used_key_index": key_idx,
+                            "next_key_index": (key_idx + 1) % num_keys,
+                            "model_used": model_name,
+                        })
+                    else:
+                        last_error = "Số đoạn AI trả về không khớp với bản gốc."
+                else:
+                    last_error = f"HTTP {resp.status_code}"
+            except Exception as e:
+                last_error = str(e)
+                continue
+
+    return jsonify({
+        "error": f"Tất cả {num_keys} API Key đều đang bận hoặc hết hạn mức ({last_error}). Hệ thống sẽ giữ nguyên bản lọc NLP."
+    }), 500
 
 
 @app.route("/api/tts", methods=["GET"])
