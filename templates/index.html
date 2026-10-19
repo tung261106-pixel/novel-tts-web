@@ -7,12 +7,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Novel TTS" />
-    <title>Novel TTS Reader — Trình Nghe & Đọc Truyện AI</title>
+    <title>Novel TTS Studio — Trình Nghe Truyện AI Đa Năng</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
     <style>
-        /* ================= BẢNG MÀU CHUYÊN NGHIỆP (THEMES) ================= */
         :root[data-theme="dark"] {
             --bg-app: #0b0f17;
             --bg-sidebar: #111622;
@@ -93,8 +92,8 @@
         }
 
         svg {
-            width: 18px;
-            height: 18px;
+            width: 17px;
+            height: 17px;
             stroke: currentColor;
             stroke-width: 2;
             stroke-linecap: round;
@@ -103,33 +102,31 @@
             flex-shrink: 0;
         }
 
-        /* Lớp nền mờ khi mở Sidebar trên điện thoại */
-        .sidebar-backdrop {
+        .sidebar-backdrop, .modal-backdrop {
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(0, 0, 0, 0.65);
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
             z-index: 998;
-            opacity: 0;
-            transition: opacity 0.25s ease;
         }
 
-        .sidebar-backdrop.show {
-            display: block;
-            opacity: 1;
+        .sidebar-backdrop.show, .modal-backdrop.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        /* ================= 1. SIDEBAR (TỦ SÁCH & LỊCH SỬ) ================= */
+        /* ================= 1. SIDEBAR ================= */
         .sidebar {
-            width: 310px;
-            min-width: 310px;
+            width: 300px;
+            min-width: 300px;
             background-color: var(--bg-sidebar);
             border-right: 1px solid var(--border-subtle);
             display: flex;
             flex-direction: column;
-            padding: 20px 16px;
+            padding: 18px 15px;
             z-index: 999;
             transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
@@ -138,29 +135,26 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            padding: 0 4px;
+            margin-bottom: 18px;
         }
 
         .brand-logo {
             display: flex;
             align-items: center;
             gap: 10px;
-            font-size: 18px;
+            font-size: 17px;
             font-weight: 700;
-            letter-spacing: -0.3px;
         }
 
         .brand-badge {
-            width: 34px;
-            height: 34px;
-            border-radius: 10px;
+            width: 32px;
+            height: 32px;
+            border-radius: 9px;
             background: linear-gradient(135deg, #6366f1, #8b5cf6);
             color: #ffffff;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
         }
 
         .icon-btn-ghost {
@@ -168,18 +162,12 @@
             color: var(--text-secondary);
             border: 1px solid var(--border-subtle);
             border-radius: 8px;
-            width: 34px;
-            height: 34px;
+            width: 32px;
+            height: 32px;
             display: none;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.15s;
-        }
-
-        .icon-btn-ghost:hover {
-            background-color: var(--bg-elevated);
-            color: var(--text-primary);
         }
 
         .sidebar-section-bar {
@@ -187,53 +175,37 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 10px;
-            padding: 0 4px;
         }
 
         .sidebar-section-title {
-            font-size: 12px;
+            font-size: 11.5px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.6px;
+            letter-spacing: 0.5px;
             color: var(--text-secondary);
         }
 
         .btn-sync {
             background-color: var(--accent-soft);
             color: var(--accent-primary);
-            border: 1px solid transparent;
+            border: none;
             border-radius: 6px;
-            padding: 5px 10px;
+            padding: 5px 9px;
             font-size: 12px;
             font-weight: 600;
             display: inline-flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
             cursor: pointer;
-            transition: all 0.15s;
-        }
-
-        .btn-sync:hover {
-            background-color: var(--accent-primary);
-            color: #ffffff;
         }
 
         .history-list {
             flex: 1;
             overflow-y: auto;
-            padding-right: 2px;
-            margin-bottom: 14px;
+            margin-bottom: 12px;
             display: flex;
             flex-direction: column;
             gap: 8px;
-        }
-
-        .history-list::-webkit-scrollbar {
-            width: 5px;
-        }
-        .history-list::-webkit-scrollbar-thumb {
-            background: var(--border-subtle);
-            border-radius: 99px;
         }
 
         .history-card {
@@ -242,70 +214,51 @@
             background-color: var(--bg-surface);
             color: var(--text-primary);
             border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 12px;
+            border-radius: 11px;
+            padding: 11px;
             cursor: pointer;
-            transition: all 0.2s ease;
-            position: relative;
+            transition: all 0.15s;
         }
 
         .history-card:hover {
             border-color: var(--accent-primary);
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-card);
         }
 
         .history-card-title {
-            font-size: 13.5px;
+            font-size: 13px;
             font-weight: 600;
             line-height: 1.4;
-            margin-bottom: 6px;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
+            margin-bottom: 5px;
         }
 
         .history-card-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 11.5px;
+            font-size: 11px;
             color: var(--text-muted);
         }
 
         .resume-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
+            display: inline-block;
             background: rgba(245, 158, 11, 0.15);
             color: #f59e0b;
             font-weight: 600;
             font-size: 11px;
-            padding: 3px 8px;
+            padding: 2px 8px;
             border-radius: 99px;
-            margin-top: 7px;
+            margin-top: 6px;
         }
 
         .sidebar-footer {
             border-top: 1px solid var(--border-subtle);
-            padding-top: 14px;
+            padding-top: 12px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 9px;
         }
 
         .footer-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 8px;
-        }
-
-        .footer-label {
-            font-size: 12.5px;
-            font-weight: 500;
-            color: var(--text-secondary);
         }
 
         .theme-pills {
@@ -320,12 +273,11 @@
             background: transparent;
             color: var(--text-secondary);
             border: none;
-            padding: 5px 9px;
-            font-size: 11.5px;
+            padding: 4px 8px;
+            font-size: 11px;
             font-weight: 600;
             border-radius: 6px;
             cursor: pointer;
-            transition: all 0.15s;
         }
 
         .theme-pill-btn.active {
@@ -337,43 +289,35 @@
             background: transparent;
             color: var(--text-secondary);
             border: 1px solid var(--border-subtle);
-            border-radius: 10px;
-            padding: 9px;
-            font-size: 12.5px;
+            border-radius: 9px;
+            padding: 8px;
+            font-size: 12px;
             font-weight: 500;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 6px;
             cursor: pointer;
-            transition: all 0.15s;
         }
 
-        .btn-clear-history:hover {
-            background-color: rgba(239, 68, 68, 0.1);
-            color: #ef4444;
-            border-color: rgba(239, 68, 68, 0.3);
-        }
-
-        /* ================= 2. KHU VỰC CHÍNH (MAIN WORKSPACE) ================= */
+        /* ================= 2. KHU VỰC CHÍNH ================= */
         .main-container {
             flex: 1;
             min-width: 0;
             display: flex;
             flex-direction: column;
-            padding: 16px 24px;
-            gap: 12px;
+            padding: 14px 20px;
+            gap: 10px;
             overflow: hidden;
-            max-width: 1100px;
+            max-width: 1120px;
             margin: 0 auto;
             width: 100%;
         }
 
-        /* Thanh nhập URL hiện đại */
         .top-search-bar {
             background-color: var(--bg-surface);
-            padding: 8px 10px;
-            border-radius: 14px;
+            padding: 7px 9px;
+            border-radius: 13px;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -386,13 +330,13 @@
             background-color: var(--bg-elevated);
             color: var(--text-primary);
             border: 1px solid var(--border-subtle);
-            border-radius: 10px;
-            height: 40px;
-            padding: 0 12px;
-            font-size: 13px;
+            border-radius: 9px;
+            height: 38px;
+            padding: 0 10px;
+            font-size: 12.5px;
             font-weight: 600;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
             cursor: pointer;
             white-space: nowrap;
         }
@@ -404,19 +348,9 @@
             align-items: center;
             background-color: var(--bg-input);
             border: 1px solid var(--border-subtle);
-            border-radius: 10px;
-            padding: 0 6px 0 12px;
-            height: 40px;
-            transition: border-color 0.2s;
-        }
-
-        .input-wrapper:focus-within {
-            border-color: var(--border-focus);
-        }
-
-        .input-wrapper svg {
-            color: var(--text-muted);
-            margin-right: 8px;
+            border-radius: 9px;
+            padding: 0 5px 0 10px;
+            height: 38px;
         }
 
         .url-input {
@@ -426,61 +360,44 @@
             color: var(--text-primary);
             border: none;
             height: 100%;
-            font-size: 13.5px;
+            font-size: 13px;
             outline: none;
+            margin-left: 6px;
         }
 
         .paste-quick-btn {
             background-color: var(--bg-elevated);
             color: var(--text-secondary);
             border: none;
-            border-radius: 7px;
-            padding: 5px 9px;
-            font-size: 11.5px;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 11px;
             font-weight: 600;
             cursor: pointer;
-            white-space: nowrap;
-            transition: all 0.15s;
-        }
-
-        .paste-quick-btn:hover {
-            color: var(--text-primary);
         }
 
         .btn-fetch {
             background: linear-gradient(135deg, #6366f1, #4f46e5);
             color: #ffffff;
             border: none;
-            border-radius: 10px;
-            padding: 0 18px;
-            height: 40px;
-            font-size: 13.5px;
+            border-radius: 9px;
+            padding: 0 15px;
+            height: 38px;
+            font-size: 13px;
             font-weight: 600;
             display: inline-flex;
             align-items: center;
-            gap: 7px;
+            gap: 6px;
             cursor: pointer;
             white-space: nowrap;
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-            transition: all 0.15s;
         }
 
-        .btn-fetch:hover:not(:disabled) {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
-        }
-
-        .btn-fetch:disabled {
-            opacity: 0.55;
-            cursor: not-allowed;
-        }
-
-        /* Thanh thông tin chương & Điều hướng */
+        /* Thanh tiêu đề chương & Thanh tính năng mở rộng */
         .chapter-toolbar {
             background-color: var(--bg-surface);
             border: 1px solid var(--border-subtle);
-            border-radius: 14px;
-            padding: 10px 14px;
+            border-radius: 13px;
+            padding: 9px 12px;
             display: flex;
             flex-direction: column;
             gap: 8px;
@@ -488,35 +405,27 @@
             overflow: hidden;
         }
 
-        .toolbar-top {
+        .toolbar-top, .toolbar-features {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
             flex-wrap: wrap;
         }
 
-        .chapter-title-wrap {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            min-width: 0;
-            flex: 1;
+        .toolbar-features {
+            padding-top: 6px;
+            border-top: 1px solid var(--border-subtle);
         }
 
         .chapter-title {
-            font-size: 15.5px;
+            font-size: 15px;
             font-weight: 700;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-        }
-
-        .toolbar-actions {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
+            flex: 1;
+            min-width: 160px;
         }
 
         .btn-secondary {
@@ -524,18 +433,20 @@
             color: var(--text-primary);
             border: 1px solid var(--border-subtle);
             border-radius: 8px;
-            height: 32px;
-            padding: 0 11px;
-            font-size: 12.5px;
+            height: 31px;
+            padding: 0 10px;
+            font-size: 12px;
             font-weight: 600;
             display: inline-flex;
             align-items: center;
             gap: 5px;
             cursor: pointer;
+            white-space: nowrap;
             transition: all 0.15s;
         }
 
-        .btn-secondary:hover:not(:disabled) {
+        .btn-secondary.active-feature {
+            background-color: var(--accent-soft);
             border-color: var(--accent-primary);
             color: var(--accent-primary);
         }
@@ -545,51 +456,46 @@
             cursor: not-allowed;
         }
 
-        /* Công tắc gạt iOS (Toggle Switch) */
         .toggle-label {
             display: inline-flex;
             align-items: center;
-            gap: 7px;
-            font-size: 12.5px;
+            gap: 6px;
+            font-size: 12px;
             font-weight: 500;
             color: var(--text-secondary);
             cursor: pointer;
-            user-select: none;
-            padding: 0 4px;
         }
 
         .toggle-input {
             appearance: none;
-            width: 34px;
-            height: 19px;
+            width: 32px;
+            height: 18px;
             background-color: var(--bg-input);
             border: 1px solid var(--border-subtle);
             border-radius: 99px;
             position: relative;
             cursor: pointer;
-            transition: background-color 0.2s;
         }
 
         .toggle-input::after {
             content: "";
-            width: 13px;
-            height: 13px;
+            width: 12px;
+            height: 12px;
             background-color: var(--text-secondary);
             border-radius: 50%;
             position: absolute;
             top: 2px;
             left: 2px;
-            transition: transform 0.2s, background-color 0.2s;
+            transition: transform 0.2s;
         }
 
         .toggle-input:checked {
             background-color: var(--accent-primary);
-            border-color: var(--accent-primary);
         }
 
         .toggle-input:checked::after {
             background-color: #ffffff;
-            transform: translateX(15px);
+            transform: translateX(14px);
         }
 
         .font-pill-group {
@@ -605,34 +511,19 @@
             background: transparent;
             color: var(--text-primary);
             border: none;
-            width: 28px;
-            height: 26px;
-            border-radius: 6px;
-            font-size: 12px;
+            width: 26px;
+            height: 24px;
+            font-size: 11.5px;
             font-weight: 700;
             cursor: pointer;
         }
 
-        .font-btn:hover {
-            background-color: var(--bg-elevated);
-        }
-
-        .font-size-val {
-            font-size: 11.5px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            min-width: 34px;
-            text-align: center;
-        }
-
-        /* Thanh tiến độ đọc mỏng dưới Header */
         .chapter-progress-track {
             position: absolute;
             bottom: 0;
             left: 0;
             right: 0;
             height: 3px;
-            background-color: transparent;
         }
 
         .chapter-progress-fill {
@@ -642,42 +533,28 @@
             transition: width 0.3s ease;
         }
 
-        /* ================= KHUNG ĐỌC TRUYỆN (READING SHEET) ================= */
+        /* ================= KHUNG ĐỌC TRUYỆN ================= */
         .reading-view {
             flex: 1;
             background-color: var(--bg-surface);
             border: 1px solid var(--border-subtle);
-            border-radius: 16px;
-            padding: 24px 32px;
+            border-radius: 15px;
+            padding: 20px 26px;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             font-size: 19px;
             line-height: 1.75;
             box-shadow: var(--shadow-card);
-            scroll-behavior: smooth;
-        }
-
-        .reading-view::-webkit-scrollbar {
-            width: 6px;
-        }
-        .reading-view::-webkit-scrollbar-thumb {
-            background: var(--border-subtle);
-            border-radius: 99px;
         }
 
         .chunk-item {
             font-family: 'Lora', Georgia, serif;
-            padding: 10px 14px;
-            margin-bottom: 10px;
-            border-radius: 10px;
+            padding: 9px 13px;
+            margin-bottom: 9px;
+            border-radius: 9px;
             border-left: 3.5px solid transparent;
             cursor: pointer;
-            transition: all 0.2s ease;
-            color: var(--text-primary);
-        }
-
-        .chunk-item:hover {
-            background-color: var(--bg-elevated);
+            transition: all 0.15s;
         }
 
         .chunk-item.active-chunk {
@@ -687,44 +564,16 @@
             font-weight: 500;
         }
 
-        .onboarding-card {
-            max-width: 560px;
-            margin: 30px auto;
-            padding: 24px;
-            border-radius: 14px;
-            background-color: var(--bg-elevated);
-            border: 1px solid var(--border-subtle);
-        }
-
-        .onboarding-title {
-            font-size: 16px;
-            font-weight: 700;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: var(--accent-primary);
-        }
-
-        .onboarding-steps {
-            font-size: 14px;
-            line-height: 1.65;
-            color: var(--text-secondary);
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        /* ================= THANH ĐIỀU KHIỂN ÂM THANH (PLAYER DOCK) ================= */
+        /* ================= PLAYER DOCK ================= */
         .player-dock {
             background-color: var(--bg-surface);
             border: 1px solid var(--border-subtle);
-            border-radius: 16px;
-            padding: 12px 18px;
+            border-radius: 15px;
+            padding: 10px 14px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 14px;
+            gap: 10px;
             flex-wrap: wrap;
             box-shadow: var(--shadow-card);
         }
@@ -732,35 +581,29 @@
         .transport-controls {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 7px;
         }
 
         .btn-transport {
-            height: 40px;
-            padding: 0 16px;
-            border-radius: 10px;
+            height: 38px;
+            padding: 0 14px;
+            border-radius: 9px;
             border: 1px solid var(--border-subtle);
             background-color: var(--bg-elevated);
             color: var(--text-primary);
-            font-size: 13px;
+            font-size: 12.5px;
             font-weight: 600;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 5px;
             cursor: pointer;
-            transition: all 0.15s;
-        }
-
-        .btn-transport:hover {
-            border-color: var(--text-secondary);
         }
 
         .btn-transport.btn-play-main {
             background: linear-gradient(135deg, #10b981, #059669);
             border-color: transparent;
             color: #ffffff;
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.28);
         }
 
         .btn-transport.btn-pause-main {
@@ -778,35 +621,32 @@
         .audio-settings {
             display: flex;
             align-items: center;
-            gap: 14px;
+            gap: 10px;
             flex-wrap: wrap;
             flex: 1;
             justify-content: flex-end;
         }
 
-        .voice-selector-wrap {
+        .voice-selector-wrap, .speed-control-pill, .status-pill {
             display: flex;
             align-items: center;
             background-color: var(--bg-input);
             border: 1px solid var(--border-subtle);
-            border-radius: 10px;
+            border-radius: 9px;
             padding: 0 10px;
-            height: 38px;
+            height: 36px;
             gap: 6px;
-        }
-
-        .voice-selector-wrap svg {
-            color: var(--accent-primary);
+            font-size: 12px;
         }
 
         .select-clean {
             background: transparent;
             color: var(--text-primary);
             border: none;
-            font-size: 13px;
+            font-size: 12.5px;
             font-weight: 600;
-            cursor: pointer;
             outline: none;
+            cursor: pointer;
         }
 
         .select-clean option {
@@ -814,59 +654,10 @@
             color: var(--text-primary);
         }
 
-        .speed-control-pill {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background-color: var(--bg-input);
-            border: 1px solid var(--border-subtle);
-            border-radius: 10px;
-            padding: 0 12px;
-            height: 38px;
-        }
-
-        .speed-badge {
-            font-size: 12.5px;
-            font-weight: 700;
-            color: var(--accent-primary);
-            min-width: 40px;
-        }
-
         .modern-slider {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 90px;
-            height: 5px;
-            background: var(--bg-elevated);
-            border-radius: 99px;
-            outline: none;
+            width: 80px;
+            accent-color: var(--accent-primary);
             cursor: pointer;
-        }
-
-        .modern-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 15px;
-            height: 15px;
-            border-radius: 50%;
-            background: var(--accent-primary);
-            cursor: pointer;
-        }
-
-        .status-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 12.5px;
-            font-weight: 500;
-            color: var(--text-secondary);
-            background-color: var(--bg-input);
-            border: 1px solid var(--border-subtle);
-            padding: 0 12px;
-            height: 38px;
-            border-radius: 10px;
-            min-width: 145px;
-            justify-content: center;
         }
 
         .status-dot {
@@ -879,15 +670,124 @@
         .status-dot.playing {
             background-color: #10b981;
             box-shadow: 0 0 8px #10b981;
-            animation: pulseDot 1.2s infinite ease-in-out;
         }
 
-        @keyframes pulseDot {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.35); opacity: 0.6; }
+        /* ================= MODALS (HẸN GIỜ, NHẠC NỀN, TỪ ĐIỂN & AI) ================= */
+        .modal-box {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            width: 92%;
+            max-width: 480px;
+            padding: 20px;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6);
+            max-height: 85vh;
+            overflow-y: auto;
+            color: var(--text-primary);
         }
 
-        /* ================= 3. TỐI ƯU GIAO DIỆN ĐIỆN THOẠI ================= */
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .modal-title {
+            font-size: 16px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .modal-close {
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            border: none;
+            border-radius: 8px;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .grid-options {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .option-card {
+            background-color: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 11px;
+            text-align: left;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .option-card.active {
+            border-color: var(--accent-primary);
+            background-color: var(--accent-soft);
+        }
+
+        .option-card-title {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+
+        .option-card-sub {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .dict-input-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .dict-input {
+            flex: 1;
+            background-color: var(--bg-input);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-primary);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .dict-list {
+            max-height: 150px;
+            overflow-y: auto;
+            background-color: var(--bg-input);
+            border: 1px solid var(--border-subtle);
+            border-radius: 9px;
+            padding: 6px;
+            margin-bottom: 12px;
+        }
+
+        .dict-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 8px;
+            border-bottom: 1px solid var(--border-subtle);
+            font-size: 12.5px;
+        }
+
+        .dict-item:last-child {
+            border-bottom: none;
+        }
+
         @media (max-width: 768px) {
             .sidebar {
                 position: fixed;
@@ -895,83 +795,25 @@
                 left: 0;
                 bottom: 0;
                 width: 85%;
-                max-width: 320px;
+                max-width: 310px;
                 transform: translateX(-100%);
-                box-shadow: 12px 0 30px rgba(0, 0, 0, 0.5);
             }
-
-            .sidebar.open {
-                transform: translateX(0);
-            }
-
-            .icon-btn-ghost {
-                display: inline-flex;
-            }
-
-            .mobile-menu-btn {
-                display: inline-flex;
-            }
-
+            .sidebar.open { transform: translateX(0); }
+            .icon-btn-ghost, .mobile-menu-btn { display: inline-flex; }
             .main-container {
                 padding: 8px 10px calc(8px + env(safe-area-inset-bottom)) 10px;
-                gap: 8px;
+                gap: 7px;
             }
-
-            .top-search-bar {
-                padding: 6px;
-                border-radius: 12px;
-            }
-
-            .btn-fetch span {
-                display: none;
-            }
-
-            .btn-fetch {
-                padding: 0 13px;
-            }
-
-            .chapter-toolbar {
-                padding: 8px 10px;
-                border-radius: 12px;
-            }
-
-            .toolbar-actions {
-                width: 100%;
-                justify-content: space-between;
-            }
-
-            .reading-view {
-                padding: 14px 12px;
-                border-radius: 12px;
-            }
-
-            .chunk-item {
-                padding: 8px 10px;
-            }
-
-            .player-dock {
-                padding: 10px;
-                border-radius: 12px;
-                gap: 8px;
-            }
-
+            .btn-fetch span { display: none; }
+            .reading-view { padding: 14px 12px; }
             .transport-controls {
                 width: 100%;
                 display: grid;
                 grid-template-columns: repeat(3, 1fr);
             }
-
             .audio-settings {
                 width: 100%;
                 justify-content: space-between;
-                gap: 6px;
-            }
-
-            .status-pill {
-                min-width: auto;
-                flex: 1;
-                padding: 0 8px;
-                font-size: 11.5px;
             }
         }
     </style>
@@ -980,44 +822,33 @@
 
     <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="toggleSidebar(false)"></div>
 
-    <!-- ================= 1. SIDEBAR: TỦ SÁCH & ĐỒNG BỘ ================= -->
+    <!-- ================= 1. SIDEBAR: TỦ SÁCH ================= -->
     <aside id="sidebar" class="sidebar">
         <div class="brand-header">
             <div class="brand-logo">
-                <div class="brand-badge">
-                    <svg viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
-                </div>
+                <div class="brand-badge">📚</div>
                 <span>Novel TTS Studio</span>
             </div>
-            <button class="icon-btn-ghost" onclick="toggleSidebar(false)" title="Đóng">
-                <svg viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-            </button>
+            <button class="icon-btn-ghost" onclick="toggleSidebar(false)">✕</button>
         </div>
 
         <div class="sidebar-section-bar">
             <span class="sidebar-section-title">Tủ sách đồng bộ</span>
-            <button id="syncBtn" class="btn-sync" onclick="syncHistoryWithServer()">
-                <svg style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
-                <span>Đồng bộ</span>
-            </button>
+            <button id="syncBtn" class="btn-sync" onclick="syncHistoryWithServer()">🔄 Đồng bộ</button>
         </div>
 
         <div id="historyList" class="history-list"></div>
 
         <div class="sidebar-footer">
             <div class="footer-row">
-                <span class="footer-label">Màu nền đọc:</span>
+                <span style="font-size:12px;color:var(--text-secondary)">Màu nền:</span>
                 <div class="theme-pills">
                     <button id="theme-dark" class="theme-pill-btn active" onclick="changeTheme('dark')">Tối</button>
                     <button id="theme-sepia" class="theme-pill-btn" onclick="changeTheme('sepia')">Giấy ấm</button>
                     <button id="theme-light" class="theme-pill-btn" onclick="changeTheme('light')">Sáng</button>
                 </div>
             </div>
-
-            <button class="btn-clear-history" onclick="clearHistory()">
-                <svg style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                <span>Xóa toàn bộ lịch sử</span>
-            </button>
+            <button class="btn-clear-history" onclick="clearHistory()">🗑 Xóa toàn bộ lịch sử</button>
         </div>
     </aside>
 
@@ -1025,13 +856,8 @@
     <main class="main-container">
         <!-- Thanh nhập URL -->
         <div class="top-search-bar">
-            <button class="mobile-menu-btn" onclick="toggleSidebar(true)">
-                <svg viewBox="0 0 24 24"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
-                <span>Tủ sách</span>
-            </button>
-
+            <button class="mobile-menu-btn" onclick="toggleSidebar(true)">☰ Tủ sách</button>
             <div class="input-wrapper">
-                <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                 <input
                     type="text"
                     id="urlInput"
@@ -1041,31 +867,19 @@
                 />
                 <button class="paste-quick-btn" onclick="pasteClipboard()">Dán</button>
             </div>
-
             <button id="fetchBtn" class="btn-fetch" onclick="startScraping()">
-                <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                <span>Tải chương</span>
+                ⬇ <span>Tải chương</span>
             </button>
         </div>
 
-        <!-- Thanh tiêu đề & Điều hướng chương -->
+        <!-- Thanh tiêu đề & 4 Tính năng nâng cao -->
         <div class="chapter-toolbar">
             <div class="toolbar-top">
-                <div class="chapter-title-wrap">
-                    <div id="chapterTitle" class="chapter-title">Chưa tải chương truyện</div>
-                </div>
+                <div id="chapterTitle" class="chapter-title">Chưa tải chương truyện</div>
 
-                <div class="toolbar-actions">
-                    <div style="display:flex; gap:6px; align-items:center;">
-                        <button id="prevChapBtn" class="btn-secondary" disabled onclick="goPrevChapter()">
-                            <svg style="width:15px;height:15px" viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" x2="5" y1="19" y2="5"/></svg>
-                            <span>Trước</span>
-                        </button>
-                        <button id="nextChapBtn" class="btn-secondary" disabled onclick="goNextChapter()">
-                            <span>Tiếp</span>
-                            <svg style="width:15px;height:15px" viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></svg>
-                        </button>
-                    </div>
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                    <button id="prevChapBtn" class="btn-secondary" disabled onclick="goPrevChapter()">⏮ Trước</button>
+                    <button id="nextChapBtn" class="btn-secondary" disabled onclick="goNextChapter()">Tiếp ⏭</button>
 
                     <label class="toggle-label">
                         <input type="checkbox" id="autoNextToggle" class="toggle-input" checked />
@@ -1073,11 +887,32 @@
                     </label>
 
                     <div class="font-pill-group">
-                        <button class="font-btn" onclick="changeFontSize(-2)" title="Giảm cỡ chữ">A-</button>
-                        <span id="fontSizeLabel" class="font-size-val">19px</span>
-                        <button class="font-btn" onclick="changeFontSize(2)" title="Tăng cỡ chữ">A+</button>
+                        <button class="font-btn" onclick="changeFontSize(-2)">A-</button>
+                        <span id="fontSizeLabel" style="font-size:11px;min-width:30px;text-align:center;">19px</span>
+                        <button class="font-btn" onclick="changeFontSize(2)">A+</button>
                     </div>
                 </div>
+            </div>
+
+            <!-- Hàng nút 4 Tính năng mới: Hẹn giờ, Nhạc nền, Từ điển & AI, Xuất MP3 -->
+            <div class="toolbar-features">
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                    <button id="sleepTimerBtn" class="btn-secondary" onclick="openModal('sleepModal')">
+                        🌙 <span id="sleepTimerLabel">Hẹn giờ</span>
+                    </button>
+
+                    <button id="bgmBtn" class="btn-secondary" onclick="openModal('bgmModal')">
+                        🎵 <span id="bgmLabel">Nhạc nền: Tắt</span>
+                    </button>
+
+                    <button id="dictBtn" class="btn-secondary active-feature" onclick="openModal('dictModal')">
+                        🧠 <span>Từ điển & Sửa dấu AI</span>
+                    </button>
+                </div>
+
+                <button id="exportMp3Btn" class="btn-secondary" onclick="exportChapterMP3()">
+                    📥 <span id="exportMp3Label">Tải MP3</span>
+                </button>
             </div>
 
             <div class="chapter-progress-track">
@@ -1085,41 +920,27 @@
             </div>
         </div>
 
-        <!-- Trang giấy đọc truyện (Reading View) -->
+        <!-- Trang đọc truyện -->
         <div id="readingView" class="reading-view">
-            <div class="onboarding-card">
-                <div class="onboarding-title">
-                    <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-                    <span>Trình Đọc & Nghe Truyện AI Đa Thiết Bị</span>
-                </div>
-                <div class="onboarding-steps">
-                    <div>• <b>Bắt đầu nhanh:</b> Bấm nút <b>"Dán"</b> trên thanh địa chỉ hoặc mở <b>"Tủ sách"</b> để chọn lại chương đang nghe dở.</div>
-                    <div>• <b>Chạm để đọc:</b> Nhấp trực tiếp vào bất kỳ đoạn văn nào trên trang giấy để giọng AI đọc ngay từ vị trí đó.</div>
-                    <div>• <b>Đồng bộ tự động:</b> Vị trí câu đang đọc được lưu tự động để bạn luân phiên nghe giữa Laptop và Điện thoại.</div>
-                </div>
+            <div class="chunk-item">
+                <b>✨ Đã nâng cấp 4 tính năng mới:</b><br><br>
+                • <b>🌙 Hẹn giờ đi ngủ:</b> Tự động giảm dần âm lượng và dừng đọc sau 15–60 phút hoặc khi hết chương hiện tại.<br>
+                • <b>🎵 Nhạc nền Tu Tiên / Huyền Huyễn:</b> 4 thể loại âm thanh không gian (Cổ Phong Tiên Hiệp, Huyền Huyễn Không Gian, Mưa Đêm Cổ Tự, Lofi Tĩnh Tâm) phát song song cùng giọng đọc.<br>
+                • <b>🧠 Từ điển & Sửa dấu theo Ngữ cảnh:</b> Tự động sửa từ viết tắt, chuẩn hóa dấu câu bị lỗi convert dựa trên ngữ cảnh câu và hỗ trợ làm mượt bằng AI.<br>
+                • <b>📥 Tải MP3:</b> Xuất toàn bộ chương truyện đang đọc thành 1 file Audiobook `.mp3` duy nhất về máy.
             </div>
         </div>
 
-        <!-- Thanh điều khiển âm thanh (Player Dock) -->
+        <!-- Thanh điều khiển Player -->
         <div class="player-dock">
             <div class="transport-controls">
-                <button class="btn-transport btn-play-main" onclick="playAudio()">
-                    <svg style="width:16px;height:16px;fill:currentColor" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></svg>
-                    <span>Phát</span>
-                </button>
-                <button class="btn-transport btn-pause-main" onclick="pauseAudio()">
-                    <svg style="width:16px;height:16px;fill:currentColor" viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></svg>
-                    <span>Tạm dừng</span>
-                </button>
-                <button class="btn-transport btn-stop-main" onclick="stopAudio()">
-                    <svg style="width:15px;height:15px;fill:currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
-                    <span>Dừng</span>
-                </button>
+                <button class="btn-transport btn-play-main" onclick="playAudio()">▶ Phát</button>
+                <button class="btn-transport btn-pause-main" onclick="pauseAudio()">⏸ Tạm dừng</button>
+                <button class="btn-transport btn-stop-main" onclick="stopAudio()">⏹ Dừng</button>
             </div>
 
             <div class="audio-settings">
                 <div class="voice-selector-wrap">
-                    <svg style="width:16px;height:16px" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
                     <select id="voiceSelect" class="select-clean" onchange="onVoiceOrSpeedChange()">
                         <option value="vi-VN-HoaiMyNeural">Nữ • Hoài My</option>
                         <option value="vi-VN-NamMinhNeural">Nam • Nam Minh</option>
@@ -1127,7 +948,7 @@
                 </div>
 
                 <div class="speed-control-pill">
-                    <span id="speedLabel" class="speed-badge">1.25x</span>
+                    <span id="speedLabel" style="font-weight:700;color:var(--accent-primary)">1.25x</span>
                     <input
                         type="range"
                         id="speedSlider"
@@ -1149,6 +970,132 @@
         </div>
     </main>
 
+    <!-- ================= MODAL 1: HẸN GIỜ ĐI NGỦ (SLEEP TIMER) ================= -->
+    <div id="sleepModal" class="modal-backdrop" onclick="if(event.target===this) closeModal('sleepModal')">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-title">🌙 Hẹn giờ tắt tự động</div>
+                <button class="modal-close" onclick="closeModal('sleepModal')">✕</button>
+            </div>
+            <div class="grid-options">
+                <button class="option-card" onclick="setSleepTimer(0)">
+                    <div class="option-card-title">Tắt hẹn giờ</div>
+                    <div class="option-card-sub">Nghe liên tục không giới hạn</div>
+                </button>
+                <button class="option-card" onclick="setSleepTimer('end_of_chapter')">
+                    <div class="option-card-title">Hết chương này</div>
+                    <div class="option-card-sub">Đọc xong chương hiện tại sẽ dừng</div>
+                </button>
+                <button class="option-card" onclick="setSleepTimer(15)">
+                    <div class="option-card-title">15 Phút</div>
+                    <div class="option-card-sub">Tự dừng và lưu vị trí câu</div>
+                </button>
+                <button class="option-card" onclick="setSleepTimer(30)">
+                    <div class="option-card-title">30 Phút</div>
+                    <div class="option-card-sub">Phù hợp nghe trước khi ngủ</div>
+                </button>
+                <button class="option-card" onclick="setSleepTimer(45)">
+                    <div class="option-card-title">45 Phút</div>
+                    <div class="option-card-sub">Tự giảm âm lượng khi sắp tắt</div>
+                </button>
+                <button class="option-card" onclick="setSleepTimer(60)">
+                    <div class="option-card-title">60 Phút</div>
+                    <div class="option-card-sub">1 tiếng nghe liên tục</div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 2: NHẠC NỀN THEO THỂ LOẠI (AMBIENT BGM) ================= -->
+    <div id="bgmModal" class="modal-backdrop" onclick="if(event.target===this) closeModal('bgmModal')">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-title">🎵 Nhạc nền theo Thể loại</div>
+                <button class="modal-close" onclick="closeModal('bgmModal')">✕</button>
+            </div>
+            <div class="grid-options">
+                <button id="bgm-off" class="option-card active" onclick="selectBGM('off', 'Tắt')">
+                    <div class="option-card-title">🔇 Tắt nhạc nền</div>
+                    <div class="option-card-sub">Chỉ nghe giọng đọc AI</div>
+                </button>
+                <button id="bgm-tienhiep" class="option-card" onclick="selectBGM('tienhiep', 'Tiên Hiệp')">
+                    <div class="option-card-title">🏮 Cổ Phong Tiên Hiệp</div>
+                    <div class="option-card-sub">Âm giai Ngũ Cung Cổ Cầm tĩnh tâm</div>
+                </button>
+                <button id="bgm-huyenhuyen" class="option-card" onclick="selectBGM('huyenhuyen', 'Huyền Huyễn')">
+                    <div class="option-card-title">🌌 Không Gian Huyền Huyễn</div>
+                    <div class="option-card-sub">Âm hưởng trầm hùng, cổ xưa</div>
+                </button>
+                <button id="bgm-muadem" class="option-card" onclick="selectBGM('muadem', 'Mưa Đêm')">
+                    <div class="option-card-title">🌧️ Mưa Đêm Cổ Tự</div>
+                    <div class="option-card-sub">Tiếng mưa rả rích & chuông ngân</div>
+                </button>
+                <button id="bgm-lofi" class="option-card" onclick="selectBGM('lofi', 'Lofi Chill')">
+                    <div class="option-card-title">☕ Tĩnh Tâm Lofi</div>
+                    <div class="option-card-sub">Hợp âm ấm áp, thư giãn dễ ngủ</div>
+                </button>
+            </div>
+
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding-top:8px; border-top:1px solid var(--border-subtle);">
+                <span style="font-size:13px; font-weight:600;">Âm lượng nhạc nền:</span>
+                <input
+                    type="range"
+                    id="bgmVolSlider"
+                    class="modern-slider"
+                    style="width:160px;"
+                    min="0.05"
+                    max="0.6"
+                    step="0.05"
+                    value="0.20"
+                    oninput="updateBGMVolume(this.value)"
+                />
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 3: TỪ ĐIỂN PHÁT ÂM & SỬA DẤU THEO NGỮ CẢNH ================= -->
+    <div id="dictModal" class="modal-backdrop" onclick="if(event.target===this) closeModal('dictModal')">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-title">🧠 Từ điển & Sửa dấu theo Ngữ cảnh</div>
+                <button class="modal-close" onclick="closeModal('dictModal')">✕</button>
+            </div>
+
+            <label class="toggle-label" style="margin-bottom:12px; display:flex; justify-content:space-between;">
+                <span><b>Tự động chuẩn hóa dấu câu & ngữ cảnh (NLP):</b><br><small style="color:var(--text-muted)">Sửa dấu phẩy/chấm câu sai và cụm từ lỗi dấu khi tải chương</small></span>
+                <input type="checkbox" id="contextPunctToggle" class="toggle-input" checked />
+            </label>
+
+            <div style="font-size:12.5px; font-weight:600; margin-bottom:6px;">1. Từ điển sửa phát âm tùy chỉnh:</div>
+            <div class="dict-input-row">
+                <input type="text" id="dictWrongInput" class="dict-input" placeholder="Từ gốc (VD: ko, vs)" />
+                <input type="text" id="dictRightInput" class="dict-input" placeholder="Đọc thành (VD: không, với)" />
+                <button class="btn-fetch" style="height:34px; padding:0 12px;" onclick="addDictEntry()">+ Thêm</button>
+            </div>
+
+            <div id="dictListContainer" class="dict-list"></div>
+
+            <div style="padding-top:10px; border-top:1px solid var(--border-subtle);">
+                <div style="font-size:12.5px; font-weight:600; margin-bottom:6px;">2. Kiểm tra Ngữ cảnh chuyên sâu bằng Gemini AI (Tùy chọn):</div>
+                <div class="dict-input-row">
+                    <input
+                        type="password"
+                        id="geminiApiKeyInput"
+                        class="dict-input"
+                        placeholder="Dán Gemini API Key (nếu muốn dùng AI sửa sâu)..."
+                        onchange="saveGeminiKey(this.value)"
+                    />
+                    <button id="aiPolishBtn" class="btn-secondary" style="height:36px;" onclick="runAIPolishCurrentChapter()">
+                        ✨ AI Sửa chương này
+                    </button>
+                </div>
+                <div style="font-size:11px; color:var(--text-muted); line-height:1.4;">
+                    * AI sẽ đọc hiểu ngữ cảnh cả câu để sửa dấu câu và lỗi chính tả convert mà giữ nguyên 100% tên chiêu thức, cảnh giới Hán Việt.
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let chunks = [];
         let currentIndex = 0;
@@ -1162,49 +1109,462 @@
         let playbackSessionId = 0;
         let audioCtx = null;
 
+        // Trạng thái Hẹn giờ (Sleep Timer)
+        let sleepTimerMode = 0; // 0, 'end_of_chapter', hoặc số phút
+        let sleepRemainingSeconds = 0;
+        let sleepIntervalId = null;
+
+        // Trạng thái Nhạc nền (Procedural Web Audio BGM)
+        let currentBGMMode = "off";
+        let bgmMasterGain = null;
+        let bgmIntervalId = null;
+        let bgmNoiseNode = null;
+        let bgmOscillators = [];
+        let bgmVolume = 0.20;
+
         const PRELOAD_AHEAD = 5;
         const LOCAL_HISTORY_KEY = "novel_tts_local_history";
         const LOCAL_THEME_KEY = "novel_tts_theme";
+        const LOCAL_DICT_KEY = "novel_tts_custom_dict";
+        const LOCAL_GEMINI_KEY = "novel_tts_gemini_key";
+
+        const DEFAULT_DICT = {
+            "ko": "không",
+            "k": "không",
+            "đc": "được",
+            "dc": "được",
+            "vs": "với",
+            "ntn": "như thế nào",
+            "mn": "mọi người",
+            "chx": "chưa"
+        };
+
         const audioPlayer = new Audio();
         audioPlayer.playsInline = true;
         audioPlayer.preload = "auto";
         const preloadCache = new Map();
 
         window.addEventListener("DOMContentLoaded", () => {
-            const savedTheme = localStorage.getItem(LOCAL_THEME_KEY) || "dark";
-            changeTheme(savedTheme);
+            changeTheme(localStorage.getItem(LOCAL_THEME_KEY) || "dark");
+            document.getElementById("geminiApiKeyInput").value = localStorage.getItem(LOCAL_GEMINI_KEY) || "";
+            renderDictList();
             syncHistoryWithServer();
             setupMediaSession();
 
-            setInterval(() => {
-                syncHistoryWithServer(true);
-            }, 60000);
+            setInterval(() => syncHistoryWithServer(true), 60000);
             document.addEventListener("visibilitychange", () => {
                 if (!document.hidden) syncHistoryWithServer(true);
             });
         });
 
-        async function pasteClipboard() {
-            try {
-                const text = await navigator.clipboard.readText();
-                if (text) {
-                    document.getElementById("urlInput").value = text.trim();
-                }
-            } catch (e) {
-                document.getElementById("urlInput").focus();
+        // ================= QUẢN LÝ MODAL =================
+        function openModal(id) {
+            document.getElementById(id).classList.add("show");
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.remove("show");
+        }
+
+        // ================= TÍNH NĂNG 1: HẸN GIỜ ĐI NGỦ (SLEEP TIMER) =================
+        function setSleepTimer(mode) {
+            if (sleepIntervalId) {
+                clearInterval(sleepIntervalId);
+                sleepIntervalId = null;
+            }
+            sleepTimerMode = mode;
+            const btn = document.getElementById("sleepTimerBtn");
+            const label = document.getElementById("sleepTimerLabel");
+            audioPlayer.volume = 1.0;
+
+            if (mode === 0) {
+                btn.classList.remove("active-feature");
+                label.innerText = "Hẹn giờ";
+            } else if (mode === "end_of_chapter") {
+                btn.classList.add("active-feature");
+                label.innerText = "Hết chương";
+            } else {
+                btn.classList.add("active-feature");
+                sleepRemainingSeconds = parseInt(mode, 10) * 60;
+                updateSleepTimerDisplay();
+                sleepIntervalId = setInterval(() => {
+                    if (!isPlaying || isPaused) return;
+                    sleepRemainingSeconds--;
+                    updateSleepTimerDisplay();
+
+                    // Tự động giảm dần âm lượng (Fade-out) trong 10 giây cuối
+                    if (sleepRemainingSeconds <= 10 && sleepRemainingSeconds > 0) {
+                        audioPlayer.volume = Math.max(0.1, sleepRemainingSeconds / 10);
+                    }
+
+                    if (sleepRemainingSeconds <= 0) {
+                        clearInterval(sleepIntervalId);
+                        sleepIntervalId = null;
+                        sleepTimerMode = 0;
+                        audioPlayer.volume = 1.0;
+                        pauseAudio();
+                        btn.classList.remove("active-feature");
+                        label.innerText = "Hẹn giờ";
+                        setStatus("Đã tắt theo hẹn giờ 🌙", false);
+                    }
+                }, 1000);
+            }
+            closeModal("sleepModal");
+        }
+
+        function updateSleepTimerDisplay() {
+            const m = Math.floor(sleepRemainingSeconds / 60);
+            const s = sleepRemainingSeconds % 60;
+            document.getElementById("sleepTimerLabel").innerText = `${m}:${String(s).padStart(2, "0")}`;
+        }
+
+        // ================= TÍNH NĂNG 2: NHẠC NỀN TU TIÊN / HUYỀN HUYỄN (WEB AUDIO SYNTH) =================
+        function ensureAudioContext() {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!audioCtx && AudioContext) {
+                audioCtx = new AudioContext();
+            }
+            if (audioCtx && audioCtx.state === "suspended") {
+                audioCtx.resume();
+            }
+            if (audioCtx && !bgmMasterGain) {
+                bgmMasterGain = audioCtx.createGain();
+                bgmMasterGain.gain.value = bgmVolume;
+                bgmMasterGain.connect(audioCtx.destination);
             }
         }
 
-        function unlockiOSAudio() {
+        function stopBGMSound() {
+            if (bgmIntervalId) {
+                clearInterval(bgmIntervalId);
+                bgmIntervalId = null;
+            }
+            if (bgmNoiseNode) {
+                try { bgmNoiseNode.stop(); bgmNoiseNode.disconnect(); } catch (e) {}
+                bgmNoiseNode = null;
+            }
+            bgmOscillators.forEach((osc) => {
+                try { osc.stop(); osc.disconnect(); } catch (e) {}
+            });
+            bgmOscillators = [];
+        }
+
+        function startBGMSound() {
+            stopBGMSound();
+            if (currentBGMMode === "off" || !isPlaying || isPaused) return;
+            ensureAudioContext();
+            if (!audioCtx) return;
+
+            // 1. Cổ Phong Tiên Hiệp: Đàn Cổ Cầm / Đàn Tranh gảy âm giai Ngũ Cung (Pentatonic)
+            if (currentBGMMode === "tienhiep") {
+                const pentatonic = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25];
+                // Âm nền sáo/pad trầm nhẹ
+                const padOsc = audioCtx.createOscillator();
+                const padGain = audioCtx.createGain();
+                padOsc.type = "sine";
+                padOsc.frequency.value = 130.81; // C3
+                padGain.gain.value = 0.08;
+                padOsc.connect(padGain);
+                padGain.connect(bgmMasterGain);
+                padOsc.start();
+                bgmOscillators.push(padOsc);
+
+                const pluckNote = () => {
+                    if (!isPlaying || isPaused || currentBGMMode !== "tienhiep") return;
+                    const now = audioCtx.currentTime;
+                    const osc = audioCtx.createOscillator();
+                    const noteGain = audioCtx.createGain();
+                    osc.type = "triangle";
+                    const freq = pentatonic[Math.floor(Math.random() * pentatonic.length)];
+                    osc.frequency.setValueAtTime(freq, now);
+
+                    noteGain.gain.setValueAtTime(0.001, now);
+                    noteGain.gain.linearRampToValueAtTime(0.18, now + 0.06);
+                    noteGain.gain.exponentialRampToValueAtTime(0.0008, now + 3.2);
+
+                    osc.connect(noteGain);
+                    noteGain.connect(bgmMasterGain);
+                    osc.start(now);
+                    osc.stop(now + 3.3);
+                };
+                pluckNote();
+                bgmIntervalId = setInterval(pluckNote, 2400);
+            }
+
+            // 2. Không Gian Huyền Huyễn: Âm vũ trụ trầm hùng, huyền bí
+            else if (currentBGMMode === "huyenhuyen") {
+                const freqs = [110.0, 164.81, 220.0, 277.18];
+                freqs.forEach((f, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = idx % 2 === 0 ? "sine" : "triangle";
+                    osc.frequency.value = f;
+                    gain.gain.value = 0.06 / (idx + 1);
+                    osc.connect(gain);
+                    gain.connect(bgmMasterGain);
+                    osc.start();
+                    bgmOscillators.push(osc);
+                });
+            }
+
+            // 3. Mưa Đêm Cổ Tự: Tiếng mưa rơi rả rích + Chuông chùa ngân xa
+            else if (currentBGMMode === "muadem") {
+                const bufferSize = audioCtx.sampleRate * 3;
+                const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const output = noiseBuffer.getChannelData(0);
+                let b0 = 0, b1 = 0, b2 = 0;
+                for (let i = 0; i < bufferSize; i++) {
+                    const white = Math.random() * 2 - 1;
+                    b0 = 0.997 * b0 + white * 0.029;
+                    b1 = 0.985 * b1 + white * 0.032;
+                    b2 = 0.950 * b2 + white * 0.048;
+                    output[i] = (b0 + b1 + b2) * 0.12;
+                }
+                bgmNoiseNode = audioCtx.createBufferSource();
+                bgmNoiseNode.buffer = noiseBuffer;
+                bgmNoiseNode.loop = true;
+
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = "lowpass";
+                filter.frequency.value = 950;
+
+                bgmNoiseNode.connect(filter);
+                filter.connect(bgmMasterGain);
+                bgmNoiseNode.start();
+
+                // Tiếng chuông thiền điểm nhẹ mỗi 7 giây
+                bgmIntervalId = setInterval(() => {
+                    if (!isPlaying || isPaused || currentBGMMode !== "muadem") return;
+                    const now = audioCtx.currentTime;
+                    const bell = audioCtx.createOscillator();
+                    const bellGain = audioCtx.createGain();
+                    bell.type = "sine";
+                    bell.frequency.setValueAtTime(528, now);
+                    bellGain.gain.setValueAtTime(0.001, now);
+                    bellGain.gain.linearRampToValueAtTime(0.09, now + 0.05);
+                    bellGain.gain.exponentialRampToValueAtTime(0.0005, now + 4.5);
+                    bell.connect(bellGain);
+                    bellGain.connect(bgmMasterGain);
+                    bell.start(now);
+                    bell.stop(now + 4.6);
+                }, 7000);
+            }
+
+            // 4. Tĩnh Tâm Lofi: Hợp âm ấm áp thư giãn
+            else if (currentBGMMode === "lofi") {
+                const chords = [
+                    [261.63, 329.63, 392.00, 493.88], // Cmaj7
+                    [220.00, 261.63, 329.63, 392.00], // Am7
+                    [174.61, 220.00, 261.63, 349.23], // Fmaj7
+                    [196.00, 246.94, 293.66, 392.00]  // G6
+                ];
+                let chordIdx = 0;
+                const playChord = () => {
+                    if (!isPlaying || isPaused || currentBGMMode !== "lofi") return;
+                    const now = audioCtx.currentTime;
+                    const notes = chords[chordIdx % chords.length];
+                    chordIdx++;
+                    notes.forEach((freq) => {
+                        const osc = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        osc.type = "sine";
+                        osc.frequency.setValueAtTime(freq, now);
+                        g.gain.setValueAtTime(0.001, now);
+                        g.gain.linearRampToValueAtTime(0.045, now + 0.4);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + 3.8);
+                        osc.connect(g);
+                        g.connect(bgmMasterGain);
+                        osc.start(now);
+                        osc.stop(now + 3.9);
+                    });
+                };
+                playChord();
+                bgmIntervalId = setInterval(playChord, 4000);
+            }
+        }
+
+        function selectBGM(mode, labelText) {
+            currentBGMMode = mode;
+            ["off", "tienhiep", "huyenhuyen", "muadem", "lofi"].forEach((m) => {
+                const el = document.getElementById(`bgm-${m}`);
+                if (el) el.classList.toggle("active", m === mode);
+            });
+            const btn = document.getElementById("bgmBtn");
+            btn.classList.toggle("active-feature", mode !== "off");
+            document.getElementById("bgmLabel").innerText = `Nhạc nền: ${labelText}`;
+            startBGMSound();
+            closeModal("bgmModal");
+        }
+
+        function updateBGMVolume(val) {
+            bgmVolume = parseFloat(val);
+            if (bgmMasterGain && audioCtx) {
+                bgmMasterGain.gain.setValueAtTime(bgmVolume, audioCtx.currentTime);
+            }
+        }
+
+        // ================= TÍNH NĂNG 3: TỪ ĐIỂN PHÁT ÂM & AI NGỮ CẢNH =================
+        function getCustomDict() {
             try {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                if (!audioCtx && AudioContext) {
-                    audioCtx = new AudioContext();
+                const saved = localStorage.getItem(LOCAL_DICT_KEY);
+                return saved ? JSON.parse(saved) : { ...DEFAULT_DICT };
+            } catch (e) {
+                return { ...DEFAULT_DICT };
+            }
+        }
+
+        function saveCustomDict(dictObj) {
+            localStorage.setItem(LOCAL_DICT_KEY, JSON.stringify(dictObj));
+            renderDictList();
+        }
+
+        function renderDictList() {
+            const container = document.getElementById("dictListContainer");
+            const dict = getCustomDict();
+            container.innerHTML = "";
+            const entries = Object.entries(dict);
+            if (!entries.length) {
+                container.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:10px;font-size:12px;">Chưa có từ nào trong từ điển.</div>`;
+                return;
+            }
+            entries.forEach(([wrong, right]) => {
+                const row = document.createElement("div");
+                row.className = "dict-item";
+                row.innerHTML = `
+                    <span><b>${wrong}</b> ➔ <span style="color:var(--accent-primary);font-weight:600">${right}</span></span>
+                    <button style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-weight:700" onclick="deleteDictEntry('${wrong}')">✕</button>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function addDictEntry() {
+            const w = document.getElementById("dictWrongInput").value.trim().toLowerCase();
+            const r = document.getElementById("dictRightInput").value.trim();
+            if (!w || !r) return;
+            const dict = getCustomDict();
+            dict[w] = r;
+            saveCustomDict(dict);
+            document.getElementById("dictWrongInput").value = "";
+            document.getElementById("dictRightInput").value = "";
+            applyClientSideDictToCurrentChunks();
+        }
+
+        function deleteDictEntry(word) {
+            const dict = getCustomDict();
+            delete dict[word];
+            saveCustomDict(dict);
+        }
+
+        function applyClientSideDictToCurrentChunks() {
+            if (!chunks.length) return;
+            const dict = getCustomDict();
+            chunks = chunks.map((c) => {
+                let updated = c;
+                Object.entries(dict).forEach(([w, r]) => {
+                    const regex = new RegExp(`(?<!\\w)${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?!\\w)`, "gi");
+                    updated = updated.replace(regex, r);
+                });
+                return updated;
+            });
+            clearPreloadCache();
+            renderChunks();
+        }
+
+        function saveGeminiKey(val) {
+            localStorage.setItem(LOCAL_GEMINI_KEY, val.trim());
+        }
+
+        async function runAIPolishCurrentChapter() {
+            if (!chunks.length) {
+                alert("Hãy tải một chương truyện trước khi dùng AI sửa ngữ cảnh!");
+                return;
+            }
+            const btn = document.getElementById("aiPolishBtn");
+            const apiKey = document.getElementById("geminiApiKeyInput").value.trim();
+            btn.disabled = true;
+            btn.innerText = "⏳ AI đang đọc ngữ cảnh...";
+
+            try {
+                const res = await fetch("/api/ai-polish", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chunks: chunks, api_key: apiKey }),
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    throw new Error(data.error || "Lỗi gọi AI");
                 }
-                if (audioCtx && audioCtx.state === "suspended") {
-                    audioCtx.resume();
+                chunks = data.chunks;
+                clearPreloadCache();
+                renderChunks();
+                highlightAndScroll(currentIndex);
+                alert("✨ Đã kiểm tra ngữ cảnh và làm mượt toàn bộ dấu câu trong chương!");
+                closeModal("dictModal");
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "✨ AI Sửa chương này";
+            }
+        }
+
+        // ================= TÍNH NĂNG 4: TẢI AUDIOBOOK MP3 =================
+        async function exportChapterMP3() {
+            if (!chunks.length) {
+                alert("Vui lòng tải một chương truyện trước khi xuất file MP3!");
+                return;
+            }
+            const btn = document.getElementById("exportMp3Btn");
+            const label = document.getElementById("exportMp3Label");
+            btn.disabled = true;
+            label.innerText = "Đang tạo MP3...";
+
+            try {
+                const title = document.getElementById("chapterTitle").innerText;
+                const voice = document.getElementById("voiceSelect").value;
+                const speed = parseFloat(document.getElementById("speedSlider").value).toFixed(2);
+
+                const res = await fetch("/api/export-mp3", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        title: title,
+                        chunks: chunks,
+                        voice: voice,
+                        speed: speed,
+                    }),
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || "Không thể xuất file MP3");
                 }
-            } catch (e) {}
+
+                const blob = await res.blob();
+                const downloadUrl = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = downloadUrl;
+                a.download = `${title.replace(/[\\/:*?"<>|]/g, "_")}.mp3`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
+            } catch (e) {
+                alert("Lỗi tải MP3: " + e.message);
+            } finally {
+                btn.disabled = false;
+                label.innerText = "Tải MP3";
+            }
+        }
+
+        // ================= CÁC HÀM CỐT LÕI (TẢI TRUYỆN, ĐỒNG BỘ & PHÁT ÂM THANH) =================
+        async function pasteClipboard() {
+            try {
+                const text = await navigator.clipboard.readText();
+                if (text) document.getElementById("urlInput").value = text.trim();
+            } catch (e) {
+                document.getElementById("urlInput").focus();
+            }
         }
 
         function setupMediaSession() {
@@ -1269,19 +1629,14 @@
             bar.style.width = pct + "%";
         }
 
-        // ================= ĐỒNG BỘ LỊCH SỬ 2 CHIỀU =================
         function getLocalHistory() {
-            try {
-                return JSON.parse(localStorage.getItem(LOCAL_HISTORY_KEY) || "[]");
-            } catch (e) {
-                return [];
-            }
+            try { return JSON.parse(localStorage.getItem(LOCAL_HISTORY_KEY) || "[]"); }
+            catch (e) { return []; }
         }
 
         function setLocalHistory(list) {
-            try {
-                localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(list.slice(0, 30)));
-            } catch (e) {}
+            try { localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(list.slice(0, 30))); }
+            catch (e) {}
         }
 
         function updateLocalEntry(title, url, chunkIdx = 0, totalChunks = 0) {
@@ -1308,9 +1663,6 @@
         }
 
         async function syncHistoryWithServer(silent = false) {
-            const syncBtn = document.getElementById("syncBtn");
-            if (!silent && syncBtn) syncBtn.querySelector("span").innerText = "Đang tải...";
-
             const localList = getLocalHistory();
             try {
                 const res = await fetch("/api/history/sync", {
@@ -1327,8 +1679,6 @@
                 }
             } catch (e) {
                 renderHistory(localList);
-            } finally {
-                if (!silent && syncBtn) syncBtn.querySelector("span").innerText = "Đồng bộ";
             }
         }
 
@@ -1356,9 +1706,8 @@
             } catch (e) {}
         }
 
-        // ================= TẢI CHƯƠNG TRUYỆN =================
         async function startScraping(urlOverride = "", resumeChunkIndex = 0) {
-            unlockiOSAudio();
+            ensureAudioContext();
             const urlInput = document.getElementById("urlInput");
             const targetUrl = (urlOverride || urlInput.value).trim();
 
@@ -1366,9 +1715,7 @@
                 alert("Vui lòng nhập đường dẫn (URL) của chương truyện cần đọc!");
                 return;
             }
-            if (urlOverride) {
-                urlInput.value = targetUrl;
-            }
+            if (urlOverride) urlInput.value = targetUrl;
 
             toggleSidebar(false);
             stopAudio();
@@ -1384,7 +1731,11 @@
                 const res = await fetch("/api/scrape", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ url: targetUrl }),
+                    body: JSON.stringify({
+                        url: targetUrl,
+                        custom_dict: getCustomDict(),
+                        enable_punct: document.getElementById("contextPunctToggle").checked,
+                    }),
                 });
                 const data = await res.json();
 
@@ -1434,13 +1785,8 @@
             });
         }
 
-        function goPrevChapter() {
-            if (prevChapterUrl) startScraping(prevChapterUrl, 0);
-        }
-
-        function goNextChapter() {
-            if (nextChapterUrl) startScraping(nextChapterUrl, 0);
-        }
+        function goPrevChapter() { if (prevChapterUrl) startScraping(prevChapterUrl, 0); }
+        function goNextChapter() { if (nextChapterUrl) startScraping(nextChapterUrl, 0); }
 
         function getCacheKey(index) {
             const voice = document.getElementById("voiceSelect").value;
@@ -1488,7 +1834,7 @@
         }
 
         async function playAudio(startIndex = null) {
-            unlockiOSAudio();
+            ensureAudioContext();
             if (!chunks.length) {
                 alert("Vui lòng tải một chương truyện trước khi nhấn Phát.");
                 return;
@@ -1497,6 +1843,7 @@
             if (isPlaying && isPaused && startIndex === null) {
                 isPaused = false;
                 audioPlayer.play();
+                startBGMSound();
                 setStatus(`Đoạn ${currentIndex + 1}/${chunks.length}`, true);
                 return;
             }
@@ -1510,6 +1857,7 @@
             isPlaying = true;
             isPaused = false;
             stopRequested = false;
+            startBGMSound();
             const sessionId = ++playbackSessionId;
 
             while (currentIndex < chunks.length && !stopRequested && sessionId === playbackSessionId) {
@@ -1552,6 +1900,7 @@
                                 if (!stopRequested && !isPaused) {
                                     audioPlayer.play().catch(() => {
                                         isPaused = true;
+                                        stopBGMSound();
                                         setStatus("Bấm Phát để tiếp tục", false);
                                     });
                                 }
@@ -1576,9 +1925,17 @@
                 isPlaying = false;
                 isPaused = false;
                 currentIndex = 0;
+                stopBGMSound();
                 clearHighlight();
                 updateProgressBar(chunks.length - 1);
                 syncReadingProgress(0);
+
+                // Kiểm tra nếu đang bật hẹn giờ "Hết chương này"
+                if (sleepTimerMode === "end_of_chapter") {
+                    setSleepTimer(0);
+                    setStatus("Đã dừng (Hết chương) 🌙", false);
+                    return;
+                }
 
                 const autoNext = document.getElementById("autoNextToggle").checked;
                 if (autoNext && nextChapterUrl) {
@@ -1594,6 +1951,7 @@
             if (isPlaying && !isPaused) {
                 audioPlayer.pause();
                 isPaused = true;
+                stopBGMSound();
                 setStatus("Đã tạm dừng", false);
                 syncReadingProgress(currentIndex);
             }
@@ -1606,6 +1964,7 @@
             isPaused = false;
             audioPlayer.pause();
             audioPlayer.removeAttribute("src");
+            stopBGMSound();
             clearHighlight();
             setStatus("Đã dừng", false);
         }
@@ -1637,7 +1996,7 @@
             const container = document.getElementById("historyList");
             container.innerHTML = "";
             if (!list || !list.length) {
-                container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 24px 12px; font-size: 13px;">Chưa có lịch sử đọc truyện.</div>`;
+                container.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:24px 12px;font-size:13px;">Chưa có lịch sử đọc truyện.</div>`;
                 return;
             }
             list.forEach((item) => {
@@ -1654,9 +2013,7 @@
 
                 card.innerHTML = `
                     <div class="history-card-title">${item.title}</div>
-                    <div class="history-card-meta">
-                        <span>🕒 ${item.timestamp || ""}</span>
-                    </div>
+                    <div class="history-card-meta">🕒 ${item.timestamp || ""}</div>
                     ${progressBadge}
                 `;
                 card.onclick = () => startScraping(item.url, chunkIdx);
