@@ -17,7 +17,7 @@ except ImportError:
 
 
 class NovelScraper:
-    """Bộ bóc tách nội dung truyện chữ vượt tường lửa 403 Forbidden trên Cloud."""
+    """Bộ bóc tách nội dung truyện chữ, link chuyển chương và ảnh bìa truyện tự động."""
 
     HEADERS = {
         "User-Agent": (
@@ -52,22 +52,21 @@ class NovelScraper:
         r"(?i)quảng\s+cáo.*",
     ]
 
+    _cover_cache = {}
+
     @classmethod
     def _download_html(cls, url: str, timeout: int = 20) -> str:
-        """Tải HTML qua 4 lớp bảo vệ để không bị lỗi 403 Forbidden trên Render."""
-        # Lớp 1: Giả lập TLS trình duyệt Chrome bằng curl_cffi
+        """Tải HTML qua 4 lớp bảo vệ để tránh lỗi 403 Forbidden trên Render."""
         if cffi_requests is not None:
-            for browser_ver in ["chrome120", "chrome110", "safari17_0"]:
-                try:
-                    resp = cffi_requests.get(
-                        url, headers=cls.HEADERS, impersonate=browser_ver, timeout=timeout
-                    )
-                    if resp.status_code == 200 and len(resp.text) > 500:
-                        return resp.text
-                except Exception:
-                    continue
+            try:
+                resp = cffi_requests.get(
+                    url, headers=cls.HEADERS, impersonate="chrome120", timeout=timeout
+                )
+                if resp.status_code == 200 and len(resp.text) > 500:
+                    return resp.text
+            except Exception:
+                pass
 
-        # Lớp 2: Vượt Cloudflare bằng cloudscraper
         if cloudscraper is not None:
             try:
                 scraper = cloudscraper.create_scraper(
@@ -80,7 +79,6 @@ class NovelScraper:
             except Exception:
                 pass
 
-        # Lớp 3: Requests tiêu chuẩn
         try:
             resp = requests.get(url, headers=cls.HEADERS, timeout=timeout)
             if resp.status_code == 200 and len(resp.text) > 500:
@@ -89,29 +87,95 @@ class NovelScraper:
         except Exception:
             pass
 
-        # Lớp 4: Cổng Proxy dự phòng khi IP máy chủ đám mây bị chặn cứng
-        proxy_endpoints = [
+        proxy_urls = [
             f"https://api.allorigins.win/raw?url={quote(url, safe='')}",
             f"https://api.codetabs.com/v1/proxy?quest={quote(url, safe='')}",
         ]
-        for proxy_url in proxy_endpoints:
+        for p_url in proxy_urls:
             try:
-                resp = requests.get(proxy_url, timeout=timeout)
+                resp = requests.get(p_url, timeout=timeout)
                 if resp.status_code == 200 and len(resp.text) > 500:
                     resp.encoding = "utf-8"
                     return resp.text
             except Exception:
                 continue
 
-        raise ValueError(f"Không thể truy cập trang web (Lỗi 403 Forbidden) tại: {url}")
+        raise ValueError(f"Không thể truy cập trang web (Lỗi 403) tại URL: {url}")
 
     @classmethod
-    def fetch_chapter(cls, url: str, timeout: int = 20) -> Tuple[str, List[str], Optional[str], Optional[str]]:
-        """Tải trang web, trích xuất tiêu đề, văn bản sạch và link chuyển chương."""
+    def _extract_cover_from_soup(cls, soup: BeautifulSoup, base_url: str) -> str:
+        """Tìm link ảnh bìa từ thẻ meta og:image hoặc các class ảnh bìa phổ biến."""
+        # 1. Tìm trong các thẻ img chứa class/id bìa truyện
+        cover_selectors = [
+            ".book-img img",
+            ".books .book img",
+            ".info-holder .books img",
+            ".book-cover img",
+            ".novel-cover img",
+            ".thumb img",
+            "img.cover",
+            "img[alt*='bìa']",
+        ]
+        for sel in cover_selectors:
+            img = soup.select_one(sel)
+            if img:
+                src = (img.get("data-src") or img.get("src") or "").strip()
+                if src and not src.startswith("data:"):
+                    return urljoin(base_url, src)
+
+        # 2. Tìm trong thẻ Meta OpenGraph / Twitter Image
+        for meta_sel in [
+            'meta[property="og:image"]',
+            'meta[name="og:image"]',
+            'meta[name="twitter:image"]',
+            'link[rel="image_src"]',
+        ]:
+            tag = soup.select_one(meta_sel)
+            if tag:
+                content = (tag.get("content") or tag.get("href") or "").strip()
+                if content and not any(x in content.lower() for x in ["logo", "favicon", "default-share"]):
+                    return urljoin(base_url, content)
+
+        return ""
+
+    @classmethod
+    def extract_novel_cover(cls, chapter_soup: BeautifulSoup, chapter_url: str) -> str:
+        """
+        Trích xuất ảnh bìa truyện từ trang chương hoặc tự động lùi về trang chủ của bộ truyện
+        để lấy ảnh bìa chính xác nhất (có bộ nhớ đệm để không phải tải lại nhiều lần).
+        """
+        # Suy luận URL gốc của bộ truyện (VD: .../gia-thien/chuong-1050 -> .../gia-thien)
+        novel_base_url = re.sub(r"/(?:chuong|chapter)-\d+.*$", "", chapter_url, flags=re.I)
+        if novel_base_url in cls._cover_cache:
+            return cls._cover_cache[novel_base_url]
+
+        # Thử lấy trực tiếp trên trang chương hiện tại
+        cover_url = cls._extract_cover_from_soup(chapter_soup, chapter_url)
+
+        # Nếu trang chương không có ảnh bìa, tự động kiểm tra trang thông tin gốc của truyện
+        if not cover_url and novel_base_url != chapter_url:
+            try:
+                novel_html = cls._download_html(novel_base_url, timeout=8)
+                novel_soup = BeautifulSoup(novel_html, "lxml")
+                cover_url = cls._extract_cover_from_soup(novel_soup, novel_base_url)
+            except Exception:
+                pass
+
+        if cover_url:
+            cls._cover_cache[novel_base_url] = cover_url
+        return cover_url
+
+    @classmethod
+    def fetch_chapter(cls, url: str, timeout: int = 20) -> Tuple[str, List[str], Optional[str], Optional[str], str]:
+        """
+        Tải trang web, trích xuất: (title, chunks, prev_url, next_url, cover_url)
+        """
         html_text = cls._download_html(url, timeout=timeout)
         soup = BeautifulSoup(html_text, "lxml")
 
+        # 1. Lấy link chuyển chương & ảnh bìa trước khi xóa các thẻ phụ
         prev_url, next_url = cls._extract_nav_links(soup, url)
+        cover_url = cls.extract_novel_cover(soup, url)
 
         for tag in soup(["script", "style", "nav", "footer", "iframe", "noscript", "aside", "form"]):
             tag.decompose()
@@ -164,7 +228,6 @@ class NovelScraper:
         if len(cleaned_text) < 50:
             raise ValueError("Nội dung bóc tách được quá ngắn.")
 
-        # Chia đoạn ~450 ký tự để giảm số lần chuyển bài, giúp phát mượt hơn trên di động
         chunks = cls.split_into_chunks(cleaned_text, max_chars=450)
 
         if chunks:
@@ -173,7 +236,7 @@ class NovelScraper:
             if not first_chunk_lower.startswith(title_lower):
                 chunks.insert(0, f"{title}.")
 
-        return title, chunks, prev_url, next_url
+        return title, chunks, prev_url, next_url, cover_url
 
     @classmethod
     def _extract_chapter_title(cls, soup: BeautifulSoup, url: str) -> str:
