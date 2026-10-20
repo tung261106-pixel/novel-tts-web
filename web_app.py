@@ -399,7 +399,37 @@ def api_tts():
         )
     except Exception as e:
         return jsonify({"error": f"Lỗi tạo giọng đọc TTS: {e}"}), 500
+        
+@app.route("/api/scrape", methods=["POST"])
+def api_scrape():
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    custom_dict = data.get("custom_dict") or {}
+    enable_punct = data.get("enable_punct", True)
 
+    if not url:
+        return jsonify({"error": "Vui lòng nhập đường dẫn (URL) của chương truyện!"}), 400
+
+    try:
+        title, raw_chunks, prev_url, next_url, cover_url = NovelScraper.fetch_chapter(url)
+        chunks = [
+            ContextualTextPolisher.polish_chunk(c, custom_dict, enable_punct)
+            for c in raw_chunks
+        ]
+        history = HistoryManager.add_entry(
+            title, url, total_chunks=len(chunks), cover_url=cover_url
+        )
+        return jsonify({
+            "title": title,
+            "url": url,
+            "cover_url": cover_url,
+            "chunks": chunks,
+            "prev_url": prev_url,
+            "next_url": next_url,
+            "history": history,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/export-mp3", methods=["POST"])
 def api_export_mp3():
