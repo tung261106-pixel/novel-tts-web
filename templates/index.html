@@ -12,50 +12,55 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --custom-wallpaper: url("https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1400&auto=format&fit=crop");
+            --wallpaper-opacity: 0.10;
+        }
+
         :root[data-theme="dark"] {
             --bg-app: #0b0f17;
-            --bg-sidebar: #111622;
-            --bg-surface: #161c2a;
+            --bg-sidebar: rgba(17, 22, 34, 0.92);
+            --bg-surface: rgba(22, 28, 42, 0.88);
             --bg-elevated: #1e2638;
             --bg-input: #0e131d;
             --text-primary: #f1f5f9;
             --text-secondary: #94a3b8;
             --text-muted: #64748b;
-            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-subtle: rgba(255, 255, 255, 0.09);
             --border-focus: #6366f1;
             --accent-primary: #6366f1;
             --accent-hover: #4f46e5;
-            --accent-soft: rgba(99, 102, 241, 0.14);
-            --highlight-bg: rgba(245, 158, 11, 0.14);
+            --accent-soft: rgba(99, 102, 241, 0.15);
+            --highlight-bg: rgba(245, 158, 11, 0.15);
             --highlight-border: #f59e0b;
             --highlight-text: #fde68a;
-            --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+            --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.55);
         }
 
         :root[data-theme="sepia"] {
             --bg-app: #f4ecd8;
-            --bg-sidebar: #ebe1c9;
-            --bg-surface: #fbf7ed;
+            --bg-sidebar: rgba(235, 225, 201, 0.92);
+            --bg-surface: rgba(251, 247, 237, 0.90);
             --bg-elevated: #e4d9be;
             --bg-input: #fbf7ed;
             --text-primary: #3b2f2f;
             --text-secondary: #6e5a4f;
             --text-muted: #8c7669;
-            --border-subtle: rgba(92, 75, 60, 0.15);
+            --border-subtle: rgba(92, 75, 60, 0.16);
             --border-focus: #b45309;
             --accent-primary: #b45309;
             --accent-hover: #92400e;
-            --accent-soft: rgba(180, 83, 9, 0.12);
+            --accent-soft: rgba(180, 83, 9, 0.13);
             --highlight-bg: rgba(217, 119, 6, 0.18);
             --highlight-border: #b45309;
             --highlight-text: #271c19;
-            --shadow-card: 0 8px 24px -8px rgba(92, 75, 60, 0.15);
+            --shadow-card: 0 8px 24px -8px rgba(92, 75, 60, 0.16);
         }
 
         :root[data-theme="light"] {
             --bg-app: #f1f5f9;
-            --bg-sidebar: #ffffff;
-            --bg-surface: #ffffff;
+            --bg-sidebar: rgba(255, 255, 255, 0.92);
+            --bg-surface: rgba(255, 255, 255, 0.90);
             --bg-elevated: #f8fafc;
             --bg-input: #f8fafc;
             --text-primary: #0f172a;
@@ -91,6 +96,21 @@
             transition: background-color 0.25s ease, color 0.25s ease;
         }
 
+        /* Lớp Hình nền toàn trang có thể tùy chỉnh */
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image: var(--custom-wallpaper);
+            background-position: center;
+            background-size: cover;
+            background-repeat: no-repeat;
+            opacity: var(--wallpaper-opacity);
+            pointer-events: none;
+            z-index: 0;
+            transition: background-image 0.4s ease, opacity 0.25s ease;
+        }
+
         .sidebar-backdrop, .modal-backdrop {
             display: none;
             position: fixed;
@@ -107,11 +127,13 @@
             justify-content: center;
         }
 
-        /* ================= 1. SIDEBAR ================= */
+        /* ================= 1. SIDEBAR (TỦ SÁCH CÓ ẢNH BÌA) ================= */
         .sidebar {
-            width: 300px;
-            min-width: 300px;
+            width: 310px;
+            min-width: 310px;
             background-color: var(--bg-sidebar);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border-right: 1px solid var(--border-subtle);
             display: flex;
             flex-direction: column;
@@ -203,21 +225,58 @@
             background-color: var(--bg-surface);
             color: var(--text-primary);
             border: 1px solid var(--border-subtle);
-            border-radius: 11px;
-            padding: 11px;
+            border-radius: 12px;
+            padding: 10px;
             cursor: pointer;
             transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 11px;
         }
 
         .history-card:hover {
             border-color: var(--accent-primary);
+            transform: translateY(-1px);
+        }
+
+        .history-cover-thumb {
+            width: 44px;
+            height: 60px;
+            border-radius: 7px;
+            object-fit: cover;
+            flex-shrink: 0;
+            border: 1px solid var(--border-subtle);
+            background-color: var(--bg-elevated);
+        }
+
+        .history-cover-fallback {
+            width: 44px;
+            height: 60px;
+            border-radius: 7px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .history-card-body {
+            flex: 1;
+            min-width: 0;
         }
 
         .history-card-title {
             font-size: 13px;
             font-weight: 600;
-            line-height: 1.4;
-            margin-bottom: 5px;
+            line-height: 1.35;
+            margin-bottom: 4px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
 
         .history-card-meta {
@@ -230,10 +289,10 @@
             background: rgba(245, 158, 11, 0.15);
             color: #f59e0b;
             font-weight: 600;
-            font-size: 11px;
-            padding: 2px 8px;
+            font-size: 10.5px;
+            padding: 2px 7px;
             border-radius: 99px;
-            margin-top: 6px;
+            margin-top: 5px;
         }
 
         .sidebar-footer {
@@ -301,10 +360,14 @@
             max-width: 1120px;
             margin: 0 auto;
             width: 100%;
+            position: relative;
+            z-index: 1;
         }
 
         .top-search-bar {
             background-color: var(--bg-surface);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             padding: 7px 9px;
             border-radius: 13px;
             display: flex;
@@ -381,8 +444,11 @@
             white-space: nowrap;
         }
 
+        /* Thanh tiêu đề chương có Ảnh bìa truyện thật */
         .chapter-toolbar {
             background-color: var(--bg-surface);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             border: 1px solid var(--border-subtle);
             border-radius: 13px;
             padding: 9px 12px;
@@ -406,6 +472,25 @@
             border-top: 1px solid var(--border-subtle);
         }
 
+        .chapter-identity {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 180px;
+        }
+
+        .active-novel-cover {
+            width: 36px;
+            height: 48px;
+            border-radius: 6px;
+            object-fit: cover;
+            border: 1px solid var(--border-subtle);
+            display: none;
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+        }
+
         .chapter-title {
             font-size: 15px;
             font-weight: 700;
@@ -413,7 +498,6 @@
             overflow: hidden;
             text-overflow: ellipsis;
             flex: 1;
-            min-width: 160px;
         }
 
         .btn-secondary {
@@ -523,10 +607,12 @@
             transition: width 0.3s ease;
         }
 
-        /* ================= KHUNG ĐỌC TRUYỆN ================= */
+        /* ================= KHUNG ĐỌC TRUYỆN & BANNER NỀN CHỜ ================= */
         .reading-view {
             flex: 1;
             background-color: var(--bg-surface);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             border: 1px solid var(--border-subtle);
             border-radius: 15px;
             padding: 20px 26px;
@@ -535,6 +621,106 @@
             font-size: 19px;
             line-height: 1.75;
             box-shadow: var(--shadow-card);
+        }
+
+        /* Banner Nền Chờ Nghe Truyện (Waiting Screen Hero) */
+        .hero-waiting-card {
+            max-width: 680px;
+            margin: 10px auto;
+            border-radius: 18px;
+            background-color: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            overflow: hidden;
+            box-shadow: var(--shadow-card);
+        }
+
+        .hero-banner-visual {
+            position: relative;
+            width: 100%;
+            height: 220px;
+            background-image: var(--custom-wallpaper);
+            background-position: center;
+            background-size: cover;
+            transition: background-image 0.4s ease;
+        }
+
+        .hero-banner-gradient {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(11, 15, 23, 0.15) 0%, var(--bg-elevated) 100%);
+        }
+
+        .hero-top-badges {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            right: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .hero-tag-pill {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(8px);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.35);
+            padding: 5px 12px;
+            border-radius: 99px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .hero-change-bg-btn {
+            background: rgba(15, 23, 42, 0.78);
+            backdrop-filter: blur(8px);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 6px 12px;
+            border-radius: 99px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .hero-change-bg-btn:hover {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+        }
+
+        .hero-banner-content {
+            padding: 16px 22px 22px 22px;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .hero-banner-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .hero-banner-desc {
+            font-size: 13.5px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            margin-bottom: 14px;
+        }
+
+        .hero-feature-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .hero-mini-pill {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            padding: 6px 11px;
+            border-radius: 9px;
+            font-size: 12px;
+            color: var(--text-secondary);
         }
 
         .chunk-item {
@@ -557,6 +743,8 @@
         /* ================= PLAYER DOCK ================= */
         .player-dock {
             background-color: var(--bg-surface);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             border: 1px solid var(--border-subtle);
             border-radius: 15px;
             padding: 10px 14px;
@@ -640,7 +828,7 @@
         }
 
         .select-clean option {
-            background-color: var(--bg-surface);
+            background-color: var(--bg-elevated);
             color: var(--text-primary);
         }
 
@@ -664,7 +852,7 @@
 
         /* ================= MODALS ================= */
         .modal-box {
-            background-color: var(--bg-surface);
+            background-color: var(--bg-elevated);
             border: 1px solid var(--border-subtle);
             border-radius: 16px;
             width: 94%;
@@ -694,7 +882,7 @@
         }
 
         .modal-close {
-            background: var(--bg-elevated);
+            background: var(--bg-surface);
             color: var(--text-secondary);
             border: none;
             border-radius: 8px;
@@ -712,7 +900,7 @@
         }
 
         .option-card {
-            background-color: var(--bg-elevated);
+            background-color: var(--bg-surface);
             border: 1px solid var(--border-subtle);
             border-radius: 10px;
             padding: 11px;
@@ -738,8 +926,37 @@
             color: var(--text-secondary);
         }
 
+        /* Thẻ chọn hình nền có ảnh preview */
+        .wallpaper-preset-card {
+            position: relative;
+            height: 82px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid transparent;
+            cursor: pointer;
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            align-items: flex-end;
+            padding: 8px;
+        }
+
+        .wallpaper-preset-card.active {
+            border-color: #f59e0b;
+            box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+        }
+
+        .wallpaper-preset-label {
+            background: rgba(15, 23, 42, 0.78);
+            color: #ffffff;
+            font-size: 11.5px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
         .setting-card-highlight {
-            background-color: var(--bg-elevated);
+            background-color: var(--bg-surface);
             border: 1px solid var(--border-subtle);
             border-radius: 11px;
             padding: 12px;
@@ -814,6 +1031,7 @@
             }
             .btn-fetch span { display: none; }
             .reading-view { padding: 14px 12px; }
+            .hero-banner-visual { height: 175px; }
             .transport-controls {
                 width: 100%;
                 display: grid;
@@ -830,7 +1048,7 @@
 
     <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="toggleSidebar(false)"></div>
 
-    <!-- ================= 1. SIDEBAR: TỦ SÁCH ================= -->
+    <!-- ================= 1. SIDEBAR: TỦ SÁCH CÓ ẢNH BÌA ================= -->
     <aside id="sidebar" class="sidebar">
         <div class="brand-header">
             <div class="brand-logo">
@@ -880,10 +1098,13 @@
             </button>
         </div>
 
-        <!-- Thanh tiêu đề & 4 Tính năng nâng cao -->
+        <!-- Thanh tiêu đề có Ảnh bìa truyện thật & Các nút tính năng -->
         <div class="chapter-toolbar">
             <div class="toolbar-top">
-                <div id="chapterTitle" class="chapter-title">Chưa tải chương truyện</div>
+                <div class="chapter-identity">
+                    <img id="activeNovelCover" class="active-novel-cover" src="" alt="Bìa truyện" referrerpolicy="no-referrer" onerror="this.style.display='none'" />
+                    <div id="chapterTitle" class="chapter-title">Chưa tải chương truyện</div>
+                </div>
 
                 <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
                     <button id="prevChapBtn" class="btn-secondary" disabled onclick="goPrevChapter()">⏮ Trước</button>
@@ -902,7 +1123,7 @@
                 </div>
             </div>
 
-            <!-- Hàng nút 4 Tính năng -->
+            <!-- Hàng nút Tính năng nâng cao + Nút Đổi Hình Nền -->
             <div class="toolbar-features">
                 <div style="display:flex; gap:6px; flex-wrap:wrap;">
                     <button id="sleepTimerBtn" class="btn-secondary" onclick="openModal('sleepModal')">
@@ -916,6 +1137,10 @@
                     <button id="dictBtn" class="btn-secondary active-feature" onclick="openModal('dictModal')">
                         🧠 <span id="aiStatusBtnLabel">AI Ngữ cảnh & Từ điển</span>
                     </button>
+
+                    <button class="btn-secondary" onclick="openModal('wallpaperModal')">
+                        🖼️ <span>Hình nền</span>
+                    </button>
                 </div>
 
                 <button id="exportMp3Btn" class="btn-secondary" onclick="exportChapterMP3()">
@@ -928,12 +1153,28 @@
             </div>
         </div>
 
-        <!-- Trang đọc truyện -->
+        <!-- Khung đọc truyện (Hiển thị Nền Chờ Hero khi mới vào web) -->
         <div id="readingView" class="reading-view">
-            <div class="chunk-item">
-                <b>🎵 Hệ thống Nhạc nền Hoà Tấu Thật & Sửa lỗi AI Ngữ cảnh:</b><br><br>
-                • <b>Nhạc nền MP3 thực thụ:</b> Bấm vào <b>"🎵 Nhạc nền"</b> để chọn các bản nhạc độc tấu/hoà tấu thật (Đàn Cổ Cầm, Đàn Tranh, Tiêu Sáo Giang Hồ, Huyền Huyễn Thái Cổ, Mưa Đêm, Lofi) hoặc dán link MP3 yêu thích của bạn.<br>
-                • <b>Sửa từ thiếu chữ & sai dấu theo ngữ cảnh:</b> Tự động sửa ngay các lỗi từ láy, mất dấu (như <i>ngoan ngoản ➔ ngoan ngoãn, con khi ➔ con khỉ, thán khí ➔ Thánh khí</i>) kết hợp Gemini AI chạy ngầm theo từng lô 8 câu.
+            <div class="hero-waiting-card">
+                <div class="hero-banner-visual">
+                    <div class="hero-banner-gradient"></div>
+                    <div class="hero-top-badges">
+                        <span class="hero-tag-pill">🏮 Không Gian Nghe Truyện AI</span>
+                        <button class="hero-change-bg-btn" onclick="openModal('wallpaperModal')">🖼️ Đổi nền chờ</button>
+                    </div>
+                </div>
+                <div class="hero-banner-content">
+                    <div class="hero-banner-title">Khởi Đầu Hành Trình Tu Tiên & Huyền Huyễn</div>
+                    <div class="hero-banner-desc">
+                        Dán đường dẫn chương truyện vào ô tìm kiếm phía trên hoặc chọn từ <b>Tủ sách đồng bộ</b> để tiếp tục nghe ngay câu đang dừng. Ảnh bìa gốc của từng bộ truyện sẽ được tự động trích xuất.
+                    </div>
+                    <div class="hero-feature-pills">
+                        <span class="hero-mini-pill">📖 Tự động lấy bìa truyện</span>
+                        <span class="hero-mini-pill">🎵 Hòa tấu Cổ Cầm & Tiêu Sáo</span>
+                        <span class="hero-mini-pill">🧠 Sửa dấu AI theo ngữ cảnh</span>
+                        <span class="hero-mini-pill">🔄 Đồng bộ Laptop & Điện thoại</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -976,6 +1217,74 @@
         </div>
     </main>
 
+    <!-- ================= MODAL 4: TÙY CHỈNH HÌNH NỀN CHỜ & NỀN MỜ ================= -->
+    <div id="wallpaperModal" class="modal-backdrop" onclick="if(event.target===this) closeModal('wallpaperModal')">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-title">🖼️ Tùy chỉnh Nền chờ & Hình nền Web</div>
+                <button class="modal-close" onclick="closeModal('wallpaperModal')">✕</button>
+            </div>
+
+            <div style="font-size:12.5px; font-weight:600; margin-bottom:8px;">1. Chọn nhanh chủ đề Tiên Hiệp / Huyền Huyễn:</div>
+            <div class="grid-options">
+                <div class="wallpaper-preset-card" style="background-image:url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000&auto=format&fit=crop')" onclick="applyWallpaperUrl('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1400&auto=format&fit=crop')">
+                    <span class="wallpaper-preset-label">🏔️ Tiên Sơn Vân Hải</span>
+                </div>
+                <div class="wallpaper-preset-card" style="background-image:url('https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1000&auto=format&fit=crop')" onclick="applyWallpaperUrl('https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1400&auto=format&fit=crop')">
+                    <span class="wallpaper-preset-label">🌌 Tinh Không Thái Cổ</span>
+                </div>
+                <div class="wallpaper-preset-card" style="background-image:url('https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=1000&auto=format&fit=crop')" onclick="applyWallpaperUrl('https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=1400&auto=format&fit=crop')">
+                    <span class="wallpaper-preset-label">🏮 Cổ Tự Đêm Trăng</span>
+                </div>
+                <div class="wallpaper-preset-card" style="background-image:url('https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1000&auto=format&fit=crop')" onclick="applyWallpaperUrl('https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1400&auto=format&fit=crop')">
+                    <span class="wallpaper-preset-label">⚔️ Đỉnh Núi Kiếm Vực</span>
+                </div>
+            </div>
+
+            <!-- Cách 2: Tải ảnh trực tiếp từ Điện thoại / Máy tính -->
+            <div class="setting-card-highlight">
+                <div style="font-size:12.5px; font-weight:600; margin-bottom:6px;">2. Tải ảnh từ Điện thoại / Laptop của bạn:</div>
+                <input
+                    type="file"
+                    id="wallpaperFileInput"
+                    accept="image/*"
+                    style="font-size:12px; width:100%;"
+                    onchange="handleWallpaperFileUpload(event)"
+                />
+            </div>
+
+            <!-- Cách 3: Dán link ảnh bất kỳ từ trên mạng -->
+            <div style="margin-bottom:12px;">
+                <div style="font-size:12.5px; font-weight:600; margin-bottom:6px;">3. Hoặc dán link ảnh (.jpg, .png, .webp) từ trên mạng:</div>
+                <div class="dict-input-row">
+                    <input
+                        type="text"
+                        id="customWallpaperUrlInput"
+                        class="dict-input"
+                        placeholder="https://.../anh-nen-tu-tien.jpg"
+                    />
+                    <button class="btn-fetch" style="height:35px; padding:0 12px;" onclick="applyCustomWallpaperInput()">Áp dụng</button>
+                </div>
+            </div>
+
+            <!-- Thanh trượt chỉnh độ rõ của nền mờ -->
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding-top:10px; border-top:1px solid var(--border-subtle);">
+                <span style="font-size:12.5px; font-weight:600;">Độ rõ hình nền sau trang đọc (<span id="bgOpacityLabel">10%</span>):</span>
+                <input
+                    type="range"
+                    id="bgOpacitySlider"
+                    class="modern-slider"
+                    style="width:140px;"
+                    min="0"
+                    max="0.35"
+                    step="0.02"
+                    value="0.10"
+                    oninput="updateWallpaperOpacity(this.value)"
+                />
+            </div>
+        </div>
+    </div>
+
     <!-- ================= MODAL 1: HẸN GIỜ ĐI NGỦ ================= -->
     <div id="sleepModal" class="modal-backdrop" onclick="if(event.target===this) closeModal('sleepModal')">
         <div class="modal-box">
@@ -1012,7 +1321,7 @@
         </div>
     </div>
 
-    <!-- ================= MODAL 2: NHẠC NỀN BẢN NHẠC THẬT (MP3 STREAMING) ================= -->
+    <!-- ================= MODAL 2: NHẠC NỀN BẢN NHẠC THẬT ================= -->
     <div id="bgmModal" class="modal-backdrop" onclick="if(event.target===this) closeModal('bgmModal')">
         <div class="modal-box">
             <div class="modal-header">
@@ -1047,7 +1356,6 @@
                 </button>
             </div>
 
-            <!-- Nút đổi bài khác & Chỉnh âm lượng -->
             <div class="setting-card-highlight" style="display:flex; flex-direction:column; gap:10px;">
                 <div style="display:flex; align-items:center; justify-content:space-between;">
                     <span id="bgmTrackStatus" style="font-size:12px; color:var(--text-secondary);">Đang chọn: Tắt nhạc nền</span>
@@ -1070,7 +1378,6 @@
                 </div>
             </div>
 
-            <!-- Dán link nhạc MP3 tùy thích -->
             <div style="padding-top:6px;">
                 <div style="font-size:12px; font-weight:600; margin-bottom:6px;">🔗 Hoặc dán link file nhạc (.mp3) yêu thích của bạn:</div>
                 <div class="dict-input-row" style="margin-bottom:0;">
@@ -1147,6 +1454,7 @@
         let chunks = [];
         let currentIndex = 0;
         let currentChapterUrl = "";
+        let currentCoverUrl = "";
         let isPlaying = false;
         let isPaused = false;
         let stopRequested = false;
@@ -1158,12 +1466,10 @@
         let currentKeyRotationIndex = 0;
         let audioCtx = null;
 
-        // Trạng thái Hẹn giờ
         let sleepTimerMode = 0;
         let sleepRemainingSeconds = 0;
         let sleepIntervalId = null;
 
-        // Trạng thái Nhạc nền MP3 thực tế
         let currentBGMMode = "off";
         let currentBGMTrackIndex = 0;
         let customBGMUrl = "";
@@ -1184,6 +1490,8 @@
         const LOCAL_API_KEYS_LIST = "novel_tts_gemini_keys_list";
         const LOCAL_AUTO_AI_KEY = "novel_tts_auto_ai_enabled";
         const LOCAL_CUSTOM_BGM_KEY = "novel_tts_custom_bgm_url";
+        const LOCAL_WALLPAPER_URL_KEY = "novel_tts_wallpaper_url";
+        const LOCAL_WALLPAPER_OPACITY_KEY = "novel_tts_wallpaper_opacity";
 
         const DEFAULT_DICT = {
             "ko": "không",
@@ -1207,6 +1515,15 @@
         window.addEventListener("DOMContentLoaded", () => {
             changeTheme(localStorage.getItem(LOCAL_THEME_KEY) || "dark");
 
+            // Khôi phục hình nền chờ và độ mờ đã lưu
+            const savedWall = localStorage.getItem(LOCAL_WALLPAPER_URL_KEY);
+            if (savedWall) applyWallpaperUrl(savedWall, false);
+            const savedOpacity = localStorage.getItem(LOCAL_WALLPAPER_OPACITY_KEY);
+            if (savedOpacity !== null) {
+                document.getElementById("bgOpacitySlider").value = savedOpacity;
+                updateWallpaperOpacity(savedOpacity);
+            }
+
             const savedAutoAI = localStorage.getItem(LOCAL_AUTO_AI_KEY) === "true";
             document.getElementById("autoAIPolishToggle").checked = savedAutoAI;
             updateAIButtonBadge();
@@ -1228,6 +1545,56 @@
         function openModal(id) { document.getElementById(id).classList.add("show"); }
         function closeModal(id) { document.getElementById(id).classList.remove("show"); }
 
+        // ================= TÙY CHỈNH HÌNH NỀN CHỜ & NỀN MỜ =================
+        function applyWallpaperUrl(url, closeAfter = true) {
+            if (!url) return;
+            document.documentElement.style.setProperty("--custom-wallpaper", `url("${url}")`);
+            try {
+                localStorage.setItem(LOCAL_WALLPAPER_URL_KEY, url);
+            } catch (e) {}
+            if (closeAfter) closeModal("wallpaperModal");
+        }
+
+        function applyCustomWallpaperInput() {
+            const url = document.getElementById("customWallpaperUrlInput").value.trim();
+            if (!url) {
+                alert("Vui lòng dán đường dẫn (URL) hình ảnh vào ô!");
+                return;
+            }
+            applyWallpaperUrl(url, true);
+        }
+
+        function handleWallpaperFileUpload(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                // Nén nhẹ ảnh qua Canvas để lưu vừa vào bộ nhớ trình duyệt (localStorage)
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement("canvas");
+                    const maxW = 1280;
+                    const scale = Math.min(1, maxW / img.width);
+                    canvas.width = Math.round(img.width * scale);
+                    canvas.height = Math.round(img.height * scale);
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+                    applyWallpaperUrl(dataUrl, true);
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function updateWallpaperOpacity(val) {
+            const num = parseFloat(val);
+            document.documentElement.style.setProperty("--wallpaper-opacity", num);
+            document.getElementById("bgOpacityLabel").innerText = `${Math.round(num * 100)}%`;
+            localStorage.setItem(LOCAL_WALLPAPER_OPACITY_KEY, val);
+        }
+
         // ================= TÍNH NĂNG 2: NHẠC NỀN BẢN NHẠC MP3 THẬT =================
         function ensureAudioContext() {
             try {
@@ -1238,7 +1605,6 @@
                 if (audioCtx && audioCtx.state === "suspended") {
                     audioCtx.resume();
                 }
-                // Kết nối bgmPlayer qua GainNode để chỉnh được âm lượng trên cả iPhone (iOS Safari)
                 if (audioCtx && !bgmMediaSourceConnected) {
                     bgmMasterGain = audioCtx.createGain();
                     bgmMasterGain.gain.value = bgmVolume;
@@ -1299,7 +1665,6 @@
                 ensureAudioContext();
                 bgmPlayer.src = buildBGMStreamUrl();
                 bgmPlayer.volume = Math.min(1.0, bgmVolume);
-                // Cho phép nghe thử ngay khi chọn trong bảng cài đặt
                 bgmPlayer.play().catch(() => {});
             }
         }
@@ -1351,7 +1716,7 @@
             }
         }
 
-        // ================= QUẢN LÝ NHIỀU API KEY & SỬA NGỮ CẢNH AI THEO LÔ =================
+        // ================= QUẢN LÝ NHIỀU API KEY & SỬA NGỮ CẢNH AI =================
         function getApiKeysList() {
             try {
                 const raw = localStorage.getItem(LOCAL_API_KEYS_LIST);
@@ -1699,7 +2064,7 @@
             }
         }
 
-        // ================= CÁC HÀM CỐT LÕI =================
+        // ================= CÁC HÀM CỐT LÕI & ĐỒNG BỘ ẢNH BÌA =================
         async function pasteClipboard() {
             try {
                 const text = await navigator.clipboard.readText();
@@ -1718,12 +2083,16 @@
             }
         }
 
-        function updateMediaSessionMetadata(title) {
+        function updateMediaSessionMetadata(title, coverUrl = "") {
             if ("mediaSession" in navigator) {
-                navigator.mediaSession.metadata = new MediaMetadata({
+                const meta = {
                     title: title || "Đang đọc truyện",
                     artist: "Novel TTS Studio",
-                });
+                };
+                if (coverUrl) {
+                    meta.artwork = [{ src: coverUrl, sizes: "512x512", type: "image/jpeg" }];
+                }
+                navigator.mediaSession.metadata = new MediaMetadata(meta);
             }
         }
 
@@ -1781,11 +2150,12 @@
             catch (e) {}
         }
 
-        function updateLocalEntry(title, url, chunkIdx = 0, totalChunks = 0) {
+        function updateLocalEntry(title, url, chunkIdx = 0, totalChunks = 0, coverUrl = "") {
             let list = getLocalHistory();
             const existing = list.find((item) => item.url === url);
             const savedChunk = chunkIdx > 0 ? chunkIdx : (existing ? existing.chunk_index || 0 : 0);
             const savedTotal = totalChunks > 0 ? totalChunks : (existing ? existing.total_chunks || 0 : 0);
+            const savedCover = coverUrl || (existing ? existing.cover_url || "" : "");
 
             list = list.filter((item) => item.url !== url);
             const now = new Date();
@@ -1795,6 +2165,7 @@
             list.unshift({
                 title: title || (existing ? existing.title : url),
                 url: url,
+                cover_url: savedCover,
                 timestamp: timestamp,
                 updated_at: Date.now() / 1000,
                 chunk_index: savedChunk,
@@ -1827,7 +2198,7 @@
         async function syncReadingProgress(idx) {
             if (!currentChapterUrl || !chunks.length) return;
             const currentTitle = document.getElementById("chapterTitle").innerText;
-            const localList = updateLocalEntry(currentTitle, currentChapterUrl, idx, chunks.length);
+            const localList = updateLocalEntry(currentTitle, currentChapterUrl, idx, chunks.length, currentCoverUrl);
             renderHistory(localList);
 
             try {
@@ -1887,8 +2258,19 @@
                 }
 
                 currentChapterUrl = targetUrl;
+                currentCoverUrl = data.cover_url || "";
                 document.getElementById("chapterTitle").innerText = data.title;
-                updateMediaSessionMetadata(data.title);
+
+                // Hiển thị ảnh bìa truyện thật trên thanh tiêu đề chương
+                const coverImg = document.getElementById("activeNovelCover");
+                if (currentCoverUrl) {
+                    coverImg.src = currentCoverUrl;
+                    coverImg.style.display = "block";
+                } else {
+                    coverImg.style.display = "none";
+                }
+
+                updateMediaSessionMetadata(data.title, currentCoverUrl);
                 prevChapterUrl = data.prev_url;
                 nextChapterUrl = data.next_url;
                 document.getElementById("prevChapBtn").disabled = !prevChapterUrl;
@@ -1897,7 +2279,7 @@
                 chunks = data.chunks || [];
                 renderChunks();
 
-                updateLocalEntry(data.title, targetUrl, resumeChunkIndex, chunks.length);
+                updateLocalEntry(data.title, targetUrl, resumeChunkIndex, chunks.length, currentCoverUrl);
                 await syncHistoryWithServer(true);
 
                 playAudio(resumeChunkIndex);
@@ -2155,10 +2537,18 @@
                     progressBadge = `<div class="resume-pill">▶ ${label}</div>`;
                 }
 
+                // Hiển thị ảnh bìa thật nếu có, nếu không dùng khung màu đại diện
+                const coverHtml = item.cover_url
+                    ? `<img src="${item.cover_url}" class="history-cover-thumb" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=\\'history-cover-fallback\\'>📖</div>'" />`
+                    : `<div class="history-cover-fallback">📖</div>`;
+
                 card.innerHTML = `
-                    <div class="history-card-title">${item.title}</div>
-                    <div class="history-card-meta">🕒 ${item.timestamp || ""}</div>
-                    ${progressBadge}
+                    ${coverHtml}
+                    <div class="history-card-body">
+                        <div class="history-card-title">${item.title}</div>
+                        <div class="history-card-meta">🕒 ${item.timestamp || ""}</div>
+                        ${progressBadge}
+                    </div>
                 `;
                 card.onclick = () => startScraping(item.url, chunkIdx);
                 container.appendChild(card);
