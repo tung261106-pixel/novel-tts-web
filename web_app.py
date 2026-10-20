@@ -31,14 +31,46 @@ def _slugify_filename(text: str) -> str:
 
 class ContextualTextPolisher:
     """
-    Bộ xử lý văn bản thông minh 2 tầng:
-    1. Sửa lỗi phát âm theo Từ điển người dùng (kiểm tra ranh giới từ độc lập).
-    2. Chuẩn hóa dấu câu & lỗi dấu tiếng Việt dựa trên ngữ cảnh cụm từ xung quanh.
+    Tầng 1: Bộ lọc Ngữ cảnh Tiếng Việt & Tiên Hiệp tức thì (Chạy ngay khi tải chương).
+    Sử dụng biểu thức chính quy có kiểm tra từ đứng trước/sau (Lookahead / Lookbehind)
+    để sửa lỗi từ láy, lỗi mất dấu, thiếu chữ mà không sửa nhầm ngữ cảnh.
     """
 
+    # 1. Sửa lỗi từ láy, chính tả và mất dấu thanh phổ biến theo cụm ngữ cảnh
     CONTEXT_PHRASE_FIXES = [
+        # Các lỗi xuất hiện trực tiếp trong ảnh Chương 1179 Già Thiên
+        (r"\bngoan\s+ngoản\b", "ngoan ngoãn"),
+        (r"\blăn\s+tan\b", "lăn tăn"),
+        (r"\bvô\s+cũng\b", "vô cùng"),
+        (r"\bnhư\s+vây\b", "như vậy"),
+        (r"\bvì\s+vây\b", "vì vậy"),
+        (r"\bđúng\s+vây\b", "đúng vậy"),
+        (r"\bthế\s+vây\b", "thế vậy"),
+        # Nhận diện "con khi" -> "con khỉ" theo ngữ cảnh danh từ chỉ con vật (không sửa "một khi", "trước khi")
+        (r"\b(con|lũ|bầy|đám)\s+khi\s+(kia|này|đó|ấy|thôi|nhỏ|vàng|đen|trắng)\b", r"\1 khỉ \2"),
+        (r"\b(con|một\s+con)\s+khi\b(?=\s+(?:kia|thôi|mà|này|đó|lợi\s+hại|biến\s+thái))", r"\1 khỉ"),
+        (r"\b(chó|gà|heo|lợn|ngựa|trâu|bò)\s*,\s*khi\b", r"\1, khỉ"),
+        # Nhận diện "thán khí" -> "Thánh khí" khi mang ngữ cảnh pháp bảo/vũ khí (phân biệt với "thán khí một tiếng" = thở dài)
+        (
+            r"\b(đánh\s+nứt(?:\s+cả)?|đánh\s+vỡ|tế\s+ra|khống\s+chế|một\s+kiện|hai\s+kiện|mảnh\s+vỡ|uy\s+năng|luyện\s+chế|cổ|truyền\s+thế|cấp|chuẩn\s+đế|vũ\s+khí)\s+thán\s+khí\b",
+            r"\1 Thánh khí",
+        ),
+        (
+            r"\bthán\s+khí\b(?=\s+(?:cổ\s+xưa|của\s+hắn|của\s+mình|bị\s+đánh|vỡ\s+nát|phát\s+sáng|rung\s+động|bay\s+ra|trấn\s+áp))",
+            "Thánh khí",
+        ),
+        # Các từ Tiên hiệp / Huyền huyễn hay bị mất chữ cái cuối do lỗi convert/bộ gõ
+        (r"\b(cực\s+đạo\s+)?đế\s+bin\b", r"\1Đế binh"),
+        (r"\bthánh\s+bin\b", "Thánh binh"),
+        (r"\bthần\s+thưc\b", "thần thức"),
+        (r"\bthần\s+thuc\b", "thần thức"),
+        (r"\bcảnh\s+giơi\b", "cảnh giới"),
+        (r"\btruyền\s+thưa\b", "truyền thừa"),
+        (r"\bthiên\s+kiêp\b", "thiên kiếp"),
+        (r"\bdị\s+tương\b", "dị tượng"),
+        (r"\bbất\s+tư\s+(thiên\s+hoàng|thần\s+dược|dược|thể|thần|kinh)\b", r"Bất Tử \1"),
+        # Các lỗi chính tả / dấu thanh tiếng Việt phổ biến khác
         (r"\bxẩy\s+ra\b", "xảy ra"),
-        (r"\bbổn\s+tọa\b", "bổn tọa"),
         (r"\blàm\s+cái\s+gi\b", "làm cái gì"),
         (r"\bkhông\s+biết\s+la\b", "không biết là"),
         (r"\bcũng\s+la\b", "cũng là"),
@@ -47,6 +79,12 @@ class ContextualTextPolisher:
         (r"\blàm\s+sao\s+bây\s+giơ\b", "làm sao bây giờ"),
         (r"\bmột\s+chut\b", "một chút"),
         (r"\bngươi\s+nghỉ\s+sao\b", "ngươi nghĩ sao"),
+        (r"\bchẳn\s+lẽ\b", "chẳng lẽ"),
+        (r"\bkhổng\s+lổ\b", "khổng lồ"),
+        (r"\brỏ\s+ràng\b", "rõ ràng"),
+        (r"\bdể\s+dàng\b", "dễ dàng"),
+        (r"\bvội\s+vàn\b", "vội vàng"),
+        (r"\blỏng\s+lẽo\b", "lỏng lẻo"),
     ]
 
     @classmethod
@@ -57,10 +95,12 @@ class ContextualTextPolisher:
         result = text
 
         if enable_context_punct:
+            # Sửa các dấu chấm/phẩy lặp vô nghĩa
             result = re.sub(r",\s*,+", ",", result)
             result = re.sub(r";\s*;+", ";", result)
             result = re.sub(r"\.\s*\.(?!\.)", ".", result)
 
+            # Khoảng trắng bị dính sau dấu câu
             result = re.sub(r"([,;:!?])([^\s\d\"'”’)])", r"\1 \2", result)
             result = re.sub(
                 r"(?<![\d])\.([A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ])",
@@ -69,6 +109,7 @@ class ContextualTextPolisher:
             )
             result = re.sub(r"\s+([,.;:!?])", r"\1", result)
 
+            # Sửa các cụm từ sai dấu / thiếu chữ theo ngữ cảnh
             for pattern, replacement in cls.CONTEXT_PHRASE_FIXES:
                 result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
 
@@ -132,15 +173,14 @@ def api_scrape():
 @app.route("/api/ai-polish", methods=["POST"])
 def api_ai_polish():
     """
-    API kiểm tra ngữ cảnh và sửa lỗi dấu câu / dấu thanh bằng AI.
-    Hỗ trợ nhận danh sách nhiều API Key (Multi-Key Rotation) và tự động đổi sang Key tiếp theo
-    hoặc đổi model dự phòng nếu một Key bị hết hạn mức (429).
+    Tầng 2: API dùng Gemini AI đọc hiểu ngữ cảnh sâu để sửa từ bị thiếu chữ, sai dấu thanh,
+    sai từ láy và chuẩn hóa dấu câu.
+    Sử dụng cấu trúc Dictionary theo ID ("0", "1", "2"...) để đảm bảo KHÔNG BAO GIỜ lệch đoạn.
     """
     data = request.get_json(silent=True) or {}
     chunks = data.get("chunks") or []
     start_key_index = int(data.get("start_key_index") or 0)
 
-    # Thu thập danh sách API Key từ giao diện người dùng + biến môi trường trên Render (nếu có)
     raw_keys = data.get("api_keys") or []
     if isinstance(raw_keys, str):
         raw_keys = [raw_keys]
@@ -151,27 +191,37 @@ def api_ai_polish():
         api_keys.append(env_key)
 
     if not chunks:
-        return jsonify({"error": "Chưa có nội dung chương để xử lý."}), 400
+        return jsonify({"error": "Chưa có nội dung để xử lý."}), 400
 
     if not api_keys:
         return jsonify({
-            "error": "Chưa có API Key! Vui lòng thêm ít nhất 1 Gemini API Key trong mục 'Từ điển & Sửa dấu AI'."
+            "error": "Chưa có API Key! Vui lòng thêm Gemini API Key trong mục AI Ngữ cảnh."
         }), 400
 
+    # Đóng gói các đoạn văn theo mã số cố định {"0": "...", "1": "..."} để không bị lệch câu
+    indexed_input = {str(i): text for i, text in enumerate(chunks)}
+
     prompt = (
-        "Bạn là biên tập viên tiểu thuyết tiên hiệp/huyền huyễn tiếng Việt. "
-        "Hãy kiểm tra ngữ cảnh từng câu dưới đây và CHỈ sửa những chỗ bị lỗi dấu câu (dấu phẩy, chấm câu đặt sai chỗ làm đứt câu) "
-        "hoặc lỗi chính tả/dấu thanh tiếng Việt hiển nhiên do quá trình dịch/convert. "
-        "TUYỆT ĐỐI giữ nguyên tên riêng, cảnh giới, chiêu thức Hán Việt, số lượng phần tử trong mảng JSON và không tóm tắt nội dung. "
-        "Trả về kết quả dưới dạng một mảng JSON (JSON array of strings) khớp chính xác số lượng đoạn đầu vào:\n\n"
-        + json.dumps(chunks, ensure_ascii=False)
+        "Bạn là chuyên gia hiệu đính văn học và biên tập viên tiểu thuyết Tiên Hiệp / Huyền Huyễn tiếng Việt (như Già Thiên, Thế Giới Hoàn Mỹ).\n"
+        "NHIỆM VỤ: Đọc hiểu kỹ ngữ cảnh của từng câu trong JSON đầu vào và sửa toàn bộ các lỗi sau:\n"
+        "1. LỖI TỪ LÁY & DẤU THANH TIẾNG VIỆT: Sửa các từ bị sai dấu hỏi/ngã/sắc/huyền/nặng hoặc sai vần. "
+        "Ví dụ: 'ngoan ngoản' -> 'ngoan ngoãn', 'lăn tan' -> 'lăn tăn', 'hối hận vô cũng' -> 'hối hận vô cùng', 'như vây' -> 'như vậy'.\n"
+        "2. LỖI MẤT DẤU LÀM BIẾN ĐỔI TỪ THEO NGỮ CẢNH: Phải đọc hiểu câu để khôi phục từ đúng. "
+        "Ví dụ: 'con khi kia đánh nứt', 'trẻ con, chó, khi mà lợi hại' -> chữ 'khi' ở đây là con vật nên phải sửa thành 'khỉ' ('con khỉ kia', 'chó, khỉ').\n"
+        "3. LỖI THIẾU CHỮ CÁI / NHẦM TỪ HÁN VIỆT TRONG BẢN DỊCH: Đọc ngữ cảnh để khôi phục chữ bị mất. "
+        "Ví dụ: 'đánh nứt cả thán khí', 'tế ra thán khí' -> ngữ cảnh là vũ khí/pháp bảo nên phải sửa 'thán khí' thành 'Thánh khí' (chỉ giữ nguyên 'thán khí' nếu ngữ cảnh là thở dài). "
+        "Hoặc 'đế bin' -> 'Đế binh', 'thần thưc' -> 'thần thức', 'cảnh giơi' -> 'cảnh giới'.\n"
+        "4. LỖI DẤU CÂU: Sửa dấu phẩy, dấu chấm đặt sai chỗ làm đứt mạch đọc.\n\n"
+        "QUY TẮC BẮT BUỘC:\n"
+        "- Giữ nguyên văn phong truyện, tên nhân vật (Diệp Phàm, Hắc Hoàng...), địa danh và không tự ý tóm tắt hay cắt bớt câu.\n"
+        "- Trả về DUY NHẤT một JSON Object có các khóa (keys) giữ nguyên chính xác như đầu vào ('0', '1', ...):\n\n"
+        + json.dumps(indexed_input, ensure_ascii=False)
     )
 
     models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash"]
     num_keys = len(api_keys)
     last_error = ""
 
-    # Xoay vòng qua tất cả các API Key trong danh sách
     for offset in range(num_keys):
         key_idx = (start_key_index + offset) % num_keys
         current_key = api_keys[key_idx]
@@ -189,22 +239,30 @@ def api_ai_polish():
                         "temperature": 0.1,
                     },
                 }
-                resp = requests.post(gemini_url, json=payload, timeout=40)
+                resp = requests.post(gemini_url, json=payload, timeout=35)
 
                 if resp.status_code == 200:
                     res_json = resp.json()
-                    raw_output = res_json["candidates"][0]["content"]["parts"][0]["text"]
-                    polished_chunks = json.loads(raw_output)
+                    raw_output = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    # Loại bỏ markdown ```json nếu có
+                    raw_output = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_output, flags=re.IGNORECASE)
+                    parsed = json.loads(raw_output)
 
-                    if isinstance(polished_chunks, list) and len(polished_chunks) == len(chunks):
+                    polished_chunks = []
+                    if isinstance(parsed, dict):
+                        for i, orig_text in enumerate(chunks):
+                            val = parsed.get(str(i))
+                            polished_chunks.append(val.strip() if isinstance(val, str) and val.strip() else orig_text)
+                    elif isinstance(parsed, list) and len(parsed) == len(chunks):
+                        polished_chunks = [str(x).strip() for x in parsed]
+
+                    if len(polished_chunks) == len(chunks):
                         return jsonify({
                             "chunks": polished_chunks,
                             "used_key_index": key_idx,
                             "next_key_index": (key_idx + 1) % num_keys,
                             "model_used": model_name,
                         })
-                    else:
-                        last_error = "Số đoạn AI trả về không khớp với bản gốc."
                 else:
                     last_error = f"HTTP {resp.status_code}"
             except Exception as e:
@@ -212,13 +270,12 @@ def api_ai_polish():
                 continue
 
     return jsonify({
-        "error": f"Tất cả {num_keys} API Key đều đang bận hoặc hết hạn mức ({last_error}). Hệ thống sẽ giữ nguyên bản lọc NLP."
+        "error": f"Không thể gọi AI ({last_error}). Đã giữ bản lọc NLP."
     }), 500
 
 
 @app.route("/api/tts", methods=["GET"])
 def api_tts():
-    """API tạo và trả về luồng âm thanh MP3 cho từng đoạn văn (chunk)."""
     text = (request.args.get("text") or "").strip()
     voice = request.args.get("voice", "vi-VN-HoaiMyNeural")
     speed = float(request.args.get("speed", 1.0))
@@ -241,7 +298,6 @@ def api_tts():
 
 @app.route("/api/export-mp3", methods=["POST"])
 def api_export_mp3():
-    """API gộp toàn bộ chương truyện thành 1 file Audiobook MP3 duy nhất để tải về máy."""
     data = request.get_json(silent=True) or {}
     chunks = data.get("chunks") or []
     title = (data.get("title") or "chuong-truyen").strip()
