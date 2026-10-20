@@ -10,11 +10,10 @@ MAX_HISTORY_ITEMS = 30
 
 
 class HistoryManager:
-    """Quản lý và đồng bộ lịch sử đọc truyện 2 chiều giữa các thiết bị."""
+    """Quản lý và đồng bộ lịch sử đọc truyện 2 chiều (kèm ảnh bìa truyện)."""
 
     @staticmethod
     def load_history() -> List[Dict[str, Any]]:
-        """Đọc danh sách lịch sử từ file JSON trên Server."""
         if not os.path.exists(HISTORY_FILE):
             return []
         try:
@@ -26,7 +25,6 @@ class HistoryManager:
 
     @staticmethod
     def save_history(history: List[Dict[str, Any]]) -> None:
-        """Ghi danh sách lịch sử xuống file JSON."""
         try:
             with open(HISTORY_FILE, "w", encoding="utf-8") as f:
                 json.dump(history[:MAX_HISTORY_ITEMS], f, ensure_ascii=False, indent=4)
@@ -34,16 +32,16 @@ class HistoryManager:
             print(f"[Storage Error] Không thể lưu lịch sử: {e}")
 
     @staticmethod
-    def add_entry(title: str, url: str, total_chunks: int = 0) -> List[Dict[str, Any]]:
-        """Thêm hoặc cập nhật chương truyện lên đầu lịch sử."""
+    def add_entry(title: str, url: str, total_chunks: int = 0, cover_url: str = "") -> List[Dict[str, Any]]:
         history = HistoryManager.load_history()
         url = url.strip()
 
-        # Giữ lại tiến độ câu đang đọc nếu chương này đã có trong lịch sử
         existing_chunk = 0
+        existing_cover = ""
         for item in history:
             if item.get("url") == url:
                 existing_chunk = item.get("chunk_index", 0)
+                existing_cover = item.get("cover_url", "")
                 break
 
         history = [item for item in history if item.get("url") != url]
@@ -51,6 +49,7 @@ class HistoryManager:
         new_entry = {
             "title": title.strip() or url,
             "url": url,
+            "cover_url": cover_url.strip() or existing_cover,
             "timestamp": datetime.now().strftime("%d/%m/%Y %H:%M"),
             "updated_at": time.time(),
             "chunk_index": existing_chunk,
@@ -63,7 +62,6 @@ class HistoryManager:
 
     @staticmethod
     def update_progress(url: str, chunk_index: int, total_chunks: int = 0) -> List[Dict[str, Any]]:
-        """Cập nhật vị trí câu (chunk) đang đọc dở để thiết bị khác đọc tiếp."""
         history = HistoryManager.load_history()
         url = url.strip()
         for item in history:
@@ -74,17 +72,12 @@ class HistoryManager:
                 item["updated_at"] = time.time()
                 item["timestamp"] = datetime.now().strftime("%d/%m/%Y %H:%M")
                 break
-        # Sắp xếp chương vừa nghe lên đầu
         history.sort(key=lambda x: float(x.get("updated_at", 0)), reverse=True)
         HistoryManager.save_history(history)
         return history
 
     @staticmethod
     def sync_entries(client_entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Hợp nhất (Merge) lịch sử từ thiết bị (Laptop/Điện thoại) với Server.
-        Bản ghi nào có thời gian cập nhật (updated_at) mới hơn sẽ được ưu tiên giữ lại.
-        """
         server_entries = HistoryManager.load_history()
         merged_map: Dict[str, Dict[str, Any]] = {}
 
@@ -106,6 +99,7 @@ class HistoryManager:
                     merged_map[url] = {
                         "title": c_item.get("title", url),
                         "url": url,
+                        "cover_url": c_item.get("cover_url", ""),
                         "timestamp": c_item.get("timestamp", ""),
                         "updated_at": c_time,
                         "chunk_index": int(c_item.get("chunk_index") or 0),
@@ -114,6 +108,8 @@ class HistoryManager:
                 else:
                     s_time = float(merged_map[url].get("updated_at") or 0)
                     if c_time > s_time:
+                        if not c_item.get("cover_url") and merged_map[url].get("cover_url"):
+                            c_item["cover_url"] = merged_map[url]["cover_url"]
                         merged_map[url] = c_item
 
         merged_list = list(merged_map.values())
@@ -125,7 +121,6 @@ class HistoryManager:
 
     @staticmethod
     def clear_history() -> None:
-        """Xóa toàn bộ lịch sử đọc."""
         if os.path.exists(HISTORY_FILE):
             try:
                 os.remove(HISTORY_FILE)
