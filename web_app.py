@@ -6,7 +6,7 @@ import os
 import re
 import unicodedata
 import requests
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, Response, stream_with_context
 import edge_tts
 
 from core.scraper import NovelScraper
@@ -29,16 +29,99 @@ def _slugify_filename(text: str) -> str:
     return text[:80] or "chuong-truyen"
 
 
-class ContextualTextPolisher:
+class BGMStreamer:
     """
-    Tầng 1: Bộ lọc Ngữ cảnh Tiếng Việt & Tiên Hiệp tức thì (Chạy ngay khi tải chương).
-    Sử dụng biểu thức chính quy có kiểm tra từ đứng trước/sau (Lookahead / Lookbehind)
-    để sửa lỗi từ láy, lỗi mất dấu, thiếu chữ mà không sửa nhầm ngữ cảnh.
+    Hệ thống tìm kiếm và phát luồng nhạc nền MP3 thật (Cổ Cầm, Đàn Tranh, Tiêu Sáo,
+    Huyền Huyễn, Mưa Đêm, Lofi) từ kho lưu trữ âm nhạc trực tuyến Internet Archive.
     """
 
-    # 1. Sửa lỗi từ láy, chính tả và mất dấu thanh phổ biến theo cụm ngữ cảnh
+    # Từ khóa truy vấn kho nhạc cụ thật tương ứng từng thể loại
+    GENRE_QUERIES = {
+        "tienhiep": '(title:(guqin OR guzheng OR "chinese zither" OR "chinese classical") OR subject:(guqin OR guzheng)) AND mediatype:audio',
+        "tieusao": '(title:(dizi OR xiao OR "chinese flute" OR "bamboo flute" OR erhu) OR subject:("chinese flute" OR erhu)) AND mediatype:audio',
+        "huyenhuyen": '(title:("dark ambient" OR "space ambient" OR "dungeon synth" OR "ambient drone") OR subject:("dark ambient" OR "space ambient")) AND mediatype:audio',
+        "muadem": '(title:("rain sound" OR "gentle rain" OR "night rain" OR "rainstorm") AND NOT title:music) AND mediatype:audio',
+        "lofi": '(title:("lofi chill" OR "chillhop" OR "relaxing piano" OR "ambient piano")) AND mediatype:audio',
+    }
+
+    # Danh sách link MP3 dự phòng cố định tốc độ cao
+    FALLBACK_TRACKS = {
+        "tienhiep": [
+            "https://archive.org/download/chinese-classical-music-guzheng/Chinese%20Classical%20Music%20-%20Guzheng.mp3",
+            "https://archive.org/download/guqin-music/01.%20Gao%20Shan%20Liu%20Shui%20%28High%20Mountains%20and%20Flowing%20Water%29.mp3",
+        ],
+        "tieusao": [
+            "https://archive.org/download/chinese-bamboo-flute-music/Chinese%20Bamboo%20Flute%20Music.mp3",
+        ],
+        "huyenhuyen": [
+            "https://archive.org/download/AmbientMusicCollection/Space%20Ambient.mp3",
+        ],
+        "muadem": [
+            "https://archive.org/download/relaxing-rain-sounds/Relaxing%20Rain%20Sounds.mp3",
+        ],
+        "lofi": [
+            "https://archive.org/download/lofi-chill-beats/Lofi%20Chill%20Beats.mp3",
+        ],
+    }
+
+    _resolved_cache = {}
+
+    @classmethod
+    def get_tracks_for_genre(cls, genre: str) -> list:
+        """Lấy danh sách các link file MP3 thật cho thể loại được chọn."""
+        if genre in cls._resolved_cache and cls._resolved_cache[genre]:
+            return cls._resolved_cache[genre]
+
+        query = cls.GENRE_QUERIES.get(genre)
+        found_urls = []
+
+        if query:
+            try:
+                search_url = "https://archive.org/advancedsearch.php"
+                params = {
+                    "q": query,
+                    "fl[]": ["identifier"],
+                    "rows": 12,
+                    "page": 1,
+                    "output": "json",
+                }
+                resp = requests.get(search_url, params=params, timeout=10)
+                if resp.status_code == 200:
+                    docs = resp.json().get("response", {}).get("docs", [])
+                    for doc in docs:
+                        ident = doc.get("identifier")
+                        if not ident:
+                            continue
+                        meta_resp = requests.get(f"https://archive.org/metadata/{ident}", timeout=6)
+                        if meta_resp.status_code != 200:
+                            continue
+                        files = meta_resp.json().get("files", [])
+                        for f in files:
+                            fname = f.get("name", "")
+                            size = int(f.get("size") or 0)
+                            # Chỉ chọn file MP3 bản nhạc thật (từ 800KB đến 15MB)
+                            if fname.lower().endswith(".mp3") and 800_000 <= size <= 15_000_000:
+                                mp3_url = f"https://archive.org/download/{ident}/{requests.utils.quote(fname)}"
+                                found_urls.append(mp3_url)
+                                break
+                        if len(found_urls) >= 6:
+                            break
+            except Exception:
+                pass
+
+        if not found_urls:
+            found_urls = cls.FALLBACK_TRACKS.get(genre, [])
+
+        cls._resolved_cache[genre] = found_urls
+        return found_urls
+
+
+class ContextualTextPolisher:
+    """
+    Tầng 1: Bộ lọc Ngữ cảnh Tiếng Việt & Tiên Hiệp tức thì.
+    """
+
     CONTEXT_PHRASE_FIXES = [
-        # Các lỗi xuất hiện trực tiếp trong ảnh Chương 1179 Già Thiên
         (r"\bngoan\s+ngoản\b", "ngoan ngoãn"),
         (r"\blăn\s+tan\b", "lăn tăn"),
         (r"\bvô\s+cũng\b", "vô cùng"),
@@ -46,11 +129,9 @@ class ContextualTextPolisher:
         (r"\bvì\s+vây\b", "vì vậy"),
         (r"\bđúng\s+vây\b", "đúng vậy"),
         (r"\bthế\s+vây\b", "thế vậy"),
-        # Nhận diện "con khi" -> "con khỉ" theo ngữ cảnh danh từ chỉ con vật (không sửa "một khi", "trước khi")
         (r"\b(con|lũ|bầy|đám)\s+khi\s+(kia|này|đó|ấy|thôi|nhỏ|vàng|đen|trắng)\b", r"\1 khỉ \2"),
         (r"\b(con|một\s+con)\s+khi\b(?=\s+(?:kia|thôi|mà|này|đó|lợi\s+hại|biến\s+thái))", r"\1 khỉ"),
         (r"\b(chó|gà|heo|lợn|ngựa|trâu|bò)\s*,\s*khi\b", r"\1, khỉ"),
-        # Nhận diện "thán khí" -> "Thánh khí" khi mang ngữ cảnh pháp bảo/vũ khí (phân biệt với "thán khí một tiếng" = thở dài)
         (
             r"\b(đánh\s+nứt(?:\s+cả)?|đánh\s+vỡ|tế\s+ra|khống\s+chế|một\s+kiện|hai\s+kiện|mảnh\s+vỡ|uy\s+năng|luyện\s+chế|cổ|truyền\s+thế|cấp|chuẩn\s+đế|vũ\s+khí)\s+thán\s+khí\b",
             r"\1 Thánh khí",
@@ -59,7 +140,6 @@ class ContextualTextPolisher:
             r"\bthán\s+khí\b(?=\s+(?:cổ\s+xưa|của\s+hắn|của\s+mình|bị\s+đánh|vỡ\s+nát|phát\s+sáng|rung\s+động|bay\s+ra|trấn\s+áp))",
             "Thánh khí",
         ),
-        # Các từ Tiên hiệp / Huyền huyễn hay bị mất chữ cái cuối do lỗi convert/bộ gõ
         (r"\b(cực\s+đạo\s+)?đế\s+bin\b", r"\1Đế binh"),
         (r"\bthánh\s+bin\b", "Thánh binh"),
         (r"\bthần\s+thưc\b", "thần thức"),
@@ -69,7 +149,6 @@ class ContextualTextPolisher:
         (r"\bthiên\s+kiêp\b", "thiên kiếp"),
         (r"\bdị\s+tương\b", "dị tượng"),
         (r"\bbất\s+tư\s+(thiên\s+hoàng|thần\s+dược|dược|thể|thần|kinh)\b", r"Bất Tử \1"),
-        # Các lỗi chính tả / dấu thanh tiếng Việt phổ biến khác
         (r"\bxẩy\s+ra\b", "xảy ra"),
         (r"\blàm\s+cái\s+gi\b", "làm cái gì"),
         (r"\bkhông\s+biết\s+la\b", "không biết là"),
@@ -95,12 +174,10 @@ class ContextualTextPolisher:
         result = text
 
         if enable_context_punct:
-            # Sửa các dấu chấm/phẩy lặp vô nghĩa
             result = re.sub(r",\s*,+", ",", result)
             result = re.sub(r";\s*;+", ";", result)
             result = re.sub(r"\.\s*\.(?!\.)", ".", result)
 
-            # Khoảng trắng bị dính sau dấu câu
             result = re.sub(r"([,;:!?])([^\s\d\"'”’)])", r"\1 \2", result)
             result = re.sub(
                 r"(?<![\d])\.([A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ])",
@@ -109,7 +186,6 @@ class ContextualTextPolisher:
             )
             result = re.sub(r"\s+([,.;:!?])", r"\1", result)
 
-            # Sửa các cụm từ sai dấu / thiếu chữ theo ngữ cảnh
             for pattern, replacement in cls.CONTEXT_PHRASE_FIXES:
                 result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
 
@@ -136,13 +212,53 @@ async def _synthesize_audio_bytes(text: str, voice: str, rate_str: str) -> bytes
 
 @app.route("/")
 def index():
-    """Trang chủ hiển thị giao diện đọc truyện."""
     return render_template("index.html")
+
+
+@app.route("/api/bgm/stream", methods=["GET"])
+def api_bgm_stream():
+    """
+    API phát luồng nhạc nền MP3 thật (Proxy Stream) giúp vượt lỗi CORS và cho phép
+    điều chỉnh âm lượng mượt mà trên cả iPhone (iOS Safari) lẫn Máy tính.
+    """
+    genre = request.args.get("genre", "tienhiep")
+    track_idx = int(request.args.get("track", 0))
+    custom_url = (request.args.get("custom_url") or "").strip()
+
+    target_url = custom_url
+    if not target_url:
+        tracks = BGMStreamer.get_tracks_for_genre(genre)
+        if not tracks:
+            return jsonify({"error": "Không tìm thấy bản nhạc nền"}), 404
+        target_url = tracks[track_idx % len(tracks)]
+
+    try:
+        upstream = requests.get(
+            target_url,
+            stream=True,
+            timeout=20,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        upstream.raise_for_status()
+
+        headers = {
+            "Content-Type": upstream.headers.get("Content-Type", "audio/mpeg"),
+            "Cache-Control": "public, max-age=86400",
+            "Access-Control-Allow-Origin": "*",
+        }
+        if "Content-Length" in upstream.headers:
+            headers["Content-Length"] = upstream.headers["Content-Length"]
+
+        return Response(
+            stream_with_context(upstream.iter_content(chunk_size=16384)),
+            headers=headers,
+        )
+    except Exception as e:
+        return jsonify({"error": f"Lỗi tải nhạc nền: {e}"}), 500
 
 
 @app.route("/api/scrape", methods=["POST"])
 def api_scrape():
-    """API nhận URL chương truyện, bóc tách văn bản sạch, lọc ngữ cảnh và lưu lịch sử."""
     data = request.get_json(silent=True) or {}
     url = (data.get("url") or "").strip()
     custom_dict = data.get("custom_dict") or {}
@@ -172,11 +288,6 @@ def api_scrape():
 
 @app.route("/api/ai-polish", methods=["POST"])
 def api_ai_polish():
-    """
-    Tầng 2: API dùng Gemini AI đọc hiểu ngữ cảnh sâu để sửa từ bị thiếu chữ, sai dấu thanh,
-    sai từ láy và chuẩn hóa dấu câu.
-    Sử dụng cấu trúc Dictionary theo ID ("0", "1", "2"...) để đảm bảo KHÔNG BAO GIỜ lệch đoạn.
-    """
     data = request.get_json(silent=True) or {}
     chunks = data.get("chunks") or []
     start_key_index = int(data.get("start_key_index") or 0)
@@ -194,11 +305,8 @@ def api_ai_polish():
         return jsonify({"error": "Chưa có nội dung để xử lý."}), 400
 
     if not api_keys:
-        return jsonify({
-            "error": "Chưa có API Key! Vui lòng thêm Gemini API Key trong mục AI Ngữ cảnh."
-        }), 400
+        return jsonify({"error": "Chưa có API Key!"}), 400
 
-    # Đóng gói các đoạn văn theo mã số cố định {"0": "...", "1": "..."} để không bị lệch câu
     indexed_input = {str(i): text for i, text in enumerate(chunks)}
 
     prompt = (
@@ -209,11 +317,11 @@ def api_ai_polish():
         "2. LỖI MẤT DẤU LÀM BIẾN ĐỔI TỪ THEO NGỮ CẢNH: Phải đọc hiểu câu để khôi phục từ đúng. "
         "Ví dụ: 'con khi kia đánh nứt', 'trẻ con, chó, khi mà lợi hại' -> chữ 'khi' ở đây là con vật nên phải sửa thành 'khỉ' ('con khỉ kia', 'chó, khỉ').\n"
         "3. LỖI THIẾU CHỮ CÁI / NHẦM TỪ HÁN VIỆT TRONG BẢN DỊCH: Đọc ngữ cảnh để khôi phục chữ bị mất. "
-        "Ví dụ: 'đánh nứt cả thán khí', 'tế ra thán khí' -> ngữ cảnh là vũ khí/pháp bảo nên phải sửa 'thán khí' thành 'Thánh khí' (chỉ giữ nguyên 'thán khí' nếu ngữ cảnh là thở dài). "
+        "Ví dụ: 'đánh nứt cả thán khí', 'tế ra thán khí' -> ngữ cảnh là vũ khí/pháp bảo nên phải sửa 'thán khí' thành 'Thánh khí'. "
         "Hoặc 'đế bin' -> 'Đế binh', 'thần thưc' -> 'thần thức', 'cảnh giơi' -> 'cảnh giới'.\n"
         "4. LỖI DẤU CÂU: Sửa dấu phẩy, dấu chấm đặt sai chỗ làm đứt mạch đọc.\n\n"
         "QUY TẮC BẮT BUỘC:\n"
-        "- Giữ nguyên văn phong truyện, tên nhân vật (Diệp Phàm, Hắc Hoàng...), địa danh và không tự ý tóm tắt hay cắt bớt câu.\n"
+        "- Giữ nguyên văn phong truyện, tên nhân vật, địa danh và không tự ý tóm tắt hay cắt bớt câu.\n"
         "- Trả về DUY NHẤT một JSON Object có các khóa (keys) giữ nguyên chính xác như đầu vào ('0', '1', ...):\n\n"
         + json.dumps(indexed_input, ensure_ascii=False)
     )
@@ -244,7 +352,6 @@ def api_ai_polish():
                 if resp.status_code == 200:
                     res_json = resp.json()
                     raw_output = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
-                    # Loại bỏ markdown ```json nếu có
                     raw_output = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_output, flags=re.IGNORECASE)
                     parsed = json.loads(raw_output)
 
@@ -269,9 +376,7 @@ def api_ai_polish():
                 last_error = str(e)
                 continue
 
-    return jsonify({
-        "error": f"Không thể gọi AI ({last_error}). Đã giữ bản lọc NLP."
-    }), 500
+    return jsonify({"error": f"Không thể gọi AI ({last_error}). Đã giữ bản lọc NLP."}), 500
 
 
 @app.route("/api/tts", methods=["GET"])
