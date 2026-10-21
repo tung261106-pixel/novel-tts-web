@@ -17,17 +17,16 @@ except ImportError:
 
 
 class NovelScraper:
-    """Bộ bóc tách nội dung truyện chữ, link chuyển chương và ảnh bìa truyện tự động."""
+    """Bộ bóc tách văn bản truyện chữ tinh gọn, ổn định và tối ưu cho TTS."""
 
     HEADERS = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/128.0.0.0 Safari/537.36"
+            "Chrome/124.0.0.0 Safari/537.36"
         ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://www.google.com.vn/",
         "Upgrade-Insecure-Requests": "1",
     }
 
@@ -41,6 +40,7 @@ class NovelScraper:
         "#content",
         ".entry-content",
         "article",
+        "main",
     ]
 
     JUNK_PATTERNS = [
@@ -52,21 +52,43 @@ class NovelScraper:
         r"(?i)quảng\s+cáo.*",
     ]
 
-    _cover_cache = {}
+    # Chỉ giữ lại chữ cái Tiếng Việt, số và dấu câu cơ bản (loại bỏ ký tự tượng hình lạ)
+    VALID_CHARS_REGEX = re.compile(
+        r"[^a-zA-Z0-9\s.,!?;:'\"()\[\]\-–—…“”‘’/\\+%&\u00C0-\u024F\u1E00-\u1EFF]"
+    )
+
+    # Sửa nhanh một số lỗi chính tả/viết tắt phổ biến ngay khi tải chương (không tốn thời gian chờ)
+    QUICK_FIXES = [
+        (r"\bngoan\s+ngoản\b", "ngoan ngoãn"),
+        (r"\blăn\s+tan\b", "lăn tăn"),
+        (r"\bvô\s+cũng\b", "vô cùng"),
+        (r"\bnhư\s+vây\b", "như vậy"),
+        (r"\bko\b", "không"),
+        (r"\bđc\b", "được"),
+    ]
+
+    _cffi_session = None
 
     @classmethod
     def _download_html(cls, url: str, timeout: int = 20) -> str:
-        """Tải HTML qua 4 lớp bảo vệ để tránh lỗi 403 Forbidden trên Render."""
+        """Tải HTML với phiên kết nối ổn định."""
+        # Lớp 1: curl_cffi (Giữ nguyên header gốc của Chrome 120 để không bị lệch chữ ký TLS)
         if cffi_requests is not None:
             try:
-                resp = cffi_requests.get(
-                    url, headers=cls.HEADERS, impersonate="chrome120", timeout=timeout
+                if cls._cffi_session is None:
+                    cls._cffi_session = cffi_requests.Session()
+                resp = cls._cffi_session.get(
+                    url,
+                    headers={"Accept-Language": "vi-VN,vi;q=0.9"},
+                    impersonate="chrome120",
+                    timeout=timeout,
                 )
                 if resp.status_code == 200 and len(resp.text) > 500:
                     return resp.text
             except Exception:
-                pass
+                cls._cffi_session = None
 
+        # Lớp 2: Cloudscraper
         if cloudscraper is not None:
             try:
                 scraper = cloudscraper.create_scraper(
@@ -79,6 +101,7 @@ class NovelScraper:
             except Exception:
                 pass
 
+        # Lớp 3: Requests tiêu chuẩn
         try:
             resp = requests.get(url, headers=cls.HEADERS, timeout=timeout)
             if resp.status_code == 200 and len(resp.text) > 500:
@@ -87,11 +110,12 @@ class NovelScraper:
         except Exception:
             pass
 
-        proxy_urls = [
-            f"https://api.allorigins.win/raw?url={quote(url, safe='')}",
-            f"https://api.codetabs.com/v1/proxy?quest={quote(url, safe='')}",
-        ]
-        for p_url in proxy_urls:
+        # Lớp 4: Proxy dự phòng khi IP Render bị nghẽn
+        encoded_url = quote(url, safe="")
+        for p_url in [
+            f"https://api.allorigins.win/raw?url={encoded_url}",
+            f"https://api.codetabs.com/v1/proxy?quest={encoded_url}",
+        ]:
             try:
                 resp = requests.get(p_url, timeout=timeout)
                 if resp.status_code == 200 and len(resp.text) > 500:
@@ -100,84 +124,20 @@ class NovelScraper:
             except Exception:
                 continue
 
-        raise ValueError(f"Không thể truy cập trang web (Lỗi 403) tại URL: {url}")
+        raise ValueError(f"Không thể kết nối tới trang truyện (Lỗi 403/Timeout): {url}")
 
     @classmethod
-    def _extract_cover_from_soup(cls, soup: BeautifulSoup, base_url: str) -> str:
-        """Tìm link ảnh bìa từ thẻ meta og:image hoặc các class ảnh bìa phổ biến."""
-        # 1. Tìm trong các thẻ img chứa class/id bìa truyện
-        cover_selectors = [
-            ".book-img img",
-            ".books .book img",
-            ".info-holder .books img",
-            ".book-cover img",
-            ".novel-cover img",
-            ".thumb img",
-            "img.cover",
-            "img[alt*='bìa']",
-        ]
-        for sel in cover_selectors:
-            img = soup.select_one(sel)
-            if img:
-                src = (img.get("data-src") or img.get("src") or "").strip()
-                if src and not src.startswith("data:"):
-                    return urljoin(base_url, src)
-
-        # 2. Tìm trong thẻ Meta OpenGraph / Twitter Image
-        for meta_sel in [
-            'meta[property="og:image"]',
-            'meta[name="og:image"]',
-            'meta[name="twitter:image"]',
-            'link[rel="image_src"]',
-        ]:
-            tag = soup.select_one(meta_sel)
-            if tag:
-                content = (tag.get("content") or tag.get("href") or "").strip()
-                if content and not any(x in content.lower() for x in ["logo", "favicon", "default-share"]):
-                    return urljoin(base_url, content)
-
-        return ""
-
-    @classmethod
-    def extract_novel_cover(cls, chapter_soup: BeautifulSoup, chapter_url: str) -> str:
+    def fetch_chapter(cls, url: str, timeout: int = 20) -> Tuple[str, List[str], Optional[str], Optional[str]]:
         """
-        Trích xuất ảnh bìa truyện từ trang chương hoặc tự động lùi về trang chủ của bộ truyện
-        để lấy ảnh bìa chính xác nhất (có bộ nhớ đệm để không phải tải lại nhiều lần).
-        """
-        # Suy luận URL gốc của bộ truyện (VD: .../gia-thien/chuong-1050 -> .../gia-thien)
-        novel_base_url = re.sub(r"/(?:chuong|chapter)-\d+.*$", "", chapter_url, flags=re.I)
-        if novel_base_url in cls._cover_cache:
-            return cls._cover_cache[novel_base_url]
-
-        # Thử lấy trực tiếp trên trang chương hiện tại
-        cover_url = cls._extract_cover_from_soup(chapter_soup, chapter_url)
-
-        # Nếu trang chương không có ảnh bìa, tự động kiểm tra trang thông tin gốc của truyện
-        if not cover_url and novel_base_url != chapter_url:
-            try:
-                novel_html = cls._download_html(novel_base_url, timeout=8)
-                novel_soup = BeautifulSoup(novel_html, "lxml")
-                cover_url = cls._extract_cover_from_soup(novel_soup, novel_base_url)
-            except Exception:
-                pass
-
-        if cover_url:
-            cls._cover_cache[novel_base_url] = cover_url
-        return cover_url
-
-    @classmethod
-    def fetch_chapter(cls, url: str, timeout: int = 20) -> Tuple[str, List[str], Optional[str], Optional[str], str]:
-        """
-        Tải trang web, trích xuất: (title, chunks, prev_url, next_url, cover_url)
+        Tải và bóc tách chương truyện.
+        Trả về đúng 4 giá trị: (title, chunks, prev_url, next_url)
         """
         html_text = cls._download_html(url, timeout=timeout)
         soup = BeautifulSoup(html_text, "lxml")
 
-        # 1. Lấy link chuyển chương & ảnh bìa trước khi xóa các thẻ phụ
         prev_url, next_url = cls._extract_nav_links(soup, url)
-        cover_url = cls.extract_novel_cover(soup, url)
 
-        for tag in soup(["script", "style", "nav", "footer", "iframe", "noscript", "aside", "form"]):
+        for tag in soup(["script", "style", "nav", "footer", "iframe", "noscript", "aside", "form", "svg"]):
             tag.decompose()
 
         title = cls._extract_chapter_title(soup, url)
@@ -191,11 +151,6 @@ class NovelScraper:
             }
         ):
             junk_div.decompose()
-
-        for el in soup.find_all(["span", "div", "a", "li"]):
-            el_text = el.get_text(strip=True)
-            if re.match(r"(?i)^(bản\s*dịch|dịch\s*ai|convert|bản\s*dịch\s*dịch\s*ai\s*convert)$", el_text):
-                el.decompose()
 
         content_node = None
         for selector in cls.CONTENT_SELECTORS:
@@ -215,7 +170,7 @@ class NovelScraper:
             content_node = best_div or soup.body
 
         if not content_node:
-            raise ValueError("Không tìm thấy nội dung văn bản trên trang web này.")
+            raise ValueError("Không tìm thấy nội dung chương truyện trên trang này.")
 
         for br in content_node.find_all("br"):
             br.replace_with("\n")
@@ -226,9 +181,9 @@ class NovelScraper:
         cleaned_text = cls._clean_text(raw_text)
 
         if len(cleaned_text) < 50:
-            raise ValueError("Nội dung bóc tách được quá ngắn.")
+            raise ValueError("Nội dung chương tải về bị trống hoặc quá ngắn. Hãy thử bấm Tải lại!")
 
-        chunks = cls.split_into_chunks(cleaned_text, max_chars=450)
+        chunks = cls.split_into_chunks(cleaned_text, max_chars=420)
 
         if chunks:
             first_chunk_lower = chunks[0].lower().strip()
@@ -236,7 +191,7 @@ class NovelScraper:
             if not first_chunk_lower.startswith(title_lower):
                 chunks.insert(0, f"{title}.")
 
-        return title, chunks, prev_url, next_url, cover_url
+        return title, chunks, prev_url, next_url
 
     @classmethod
     def _extract_chapter_title(cls, soup: BeautifulSoup, url: str) -> str:
@@ -351,7 +306,17 @@ class NovelScraper:
         lines = text.splitlines()
         cleaned_lines = []
 
-        for line in lines:
+        for raw_line in lines:
+            raw_line = raw_line.strip()
+            if not raw_line:
+                continue
+
+            # Bỏ qua các dòng bẫy chứa nhiều dấu gạch dưới '_'
+            if raw_line.count("_") >= 3:
+                continue
+
+            # Loại bỏ các ký tự lạ/tượng hình không thuộc bảng chữ cái Tiếng Việt
+            line = cls.VALID_CHARS_REGEX.sub("", raw_line)
             line = re.sub(r"\s+", " ", line).strip()
             if not line:
                 continue
@@ -366,13 +331,21 @@ class NovelScraper:
                 continue
 
             is_junk = any(re.search(pattern, line) for pattern in cls.JUNK_PATTERNS)
-            if not is_junk:
-                cleaned_lines.append(line)
+            if is_junk:
+                continue
+
+            # Chuẩn hóa dấu câu cơ bản và sửa lỗi từ phổ biến
+            line = re.sub(r",\s*,+", ",", line)
+            line = re.sub(r"\.\s*\.(?!\.)", ".", line)
+            for pattern, replacement in cls.QUICK_FIXES:
+                line = re.sub(pattern, replacement, line, flags=re.IGNORECASE)
+
+            cleaned_lines.append(line)
 
         return "\n".join(cleaned_lines)
 
     @classmethod
-    def split_into_chunks(cls, text: str, max_chars: int = 450) -> List[str]:
+    def split_into_chunks(cls, text: str, max_chars: int = 420) -> List[str]:
         sentences = re.split(r"(?<=[.!?…])\s+|\n+", text)
         chunks: List[str] = []
         current_chunk = ""
