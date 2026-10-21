@@ -116,8 +116,6 @@ class BGMStreamer:
 class ContextualTextPolisher:
     """
     Tầng 1: Bộ lọc Ngữ cảnh Tiếng Việt & Tiên Hiệp tức thì.
-    Sử dụng biểu thức chính quy có kiểm tra từ đứng trước/sau để sửa lỗi từ láy,
-    lỗi mất dấu, thiếu chữ mà không sửa nhầm ngữ cảnh.
     """
 
     CONTEXT_PHRASE_FIXES = [
@@ -217,10 +215,7 @@ def index():
 
 @app.route("/api/bgm/stream", methods=["GET"])
 def api_bgm_stream():
-    """
-    API phát luồng nhạc nền MP3 thật (Proxy Stream) giúp vượt lỗi CORS và cho phép
-    điều chỉnh âm lượng mượt mà trên cả iPhone (iOS Safari) lẫn Máy tính.
-    """
+    """API phát luồng nhạc nền MP3 thật (Proxy Stream)."""
     genre = request.args.get("genre", "tienhiep")
     track_idx = int(request.args.get("track", 0))
     custom_url = (request.args.get("custom_url") or "").strip()
@@ -259,9 +254,13 @@ def api_bgm_stream():
 
 @app.route("/api/scrape", methods=["POST"])
 def api_scrape():
-    """API nhận URL chương truyện, bóc tách văn bản sạch, ảnh bìa và lưu lịch sử."""
+    """
+    API nhận URL chương truyện (hoặc mã HTML được trình duyệt người dùng tải hộ khi Server bị chặn 403),
+    bóc tách văn bản sạch, ảnh bìa và lưu lịch sử.
+    """
     data = request.get_json(silent=True) or {}
     url = (data.get("url") or "").strip()
+    raw_html = (data.get("raw_html") or "").strip()
     custom_dict = data.get("custom_dict") or {}
     enable_punct = data.get("enable_punct", True)
 
@@ -269,8 +268,11 @@ def api_scrape():
         return jsonify({"error": "Vui lòng nhập đường dẫn (URL) của chương truyện!"}), 400
 
     try:
-        # Tương thích an toàn với cả bản scraper.py trả về 4 hoặc 5 giá trị
-        scrape_result = NovelScraper.fetch_chapter(url)
+        if raw_html and len(raw_html) > 500 and hasattr(NovelScraper, "parse_chapter_html"):
+            scrape_result = NovelScraper.parse_chapter_html(raw_html, url)
+        else:
+            scrape_result = NovelScraper.fetch_chapter(url)
+
         if len(scrape_result) >= 5:
             title, raw_chunks, prev_url, next_url, cover_url = scrape_result[:5]
         else:
@@ -282,7 +284,6 @@ def api_scrape():
             for c in raw_chunks
         ]
 
-        # Tương thích an toàn với cả bản storage.py cũ hoặc mới
         try:
             history = HistoryManager.add_entry(
                 title, url, total_chunks=len(chunks), cover_url=cover_url
