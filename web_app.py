@@ -16,7 +16,7 @@ app = Flask(__name__)
 
 
 def _speed_to_rate_str(speed: float) -> str:
-    """Chuyển hệ số tốc độ (0.5 - 2.0) thành chuỗi phần trăm cho edge-tts (VD: +25%)."""
+    """Chuyển hệ số tốc độ (0.5 - 2.0) thành chuỗi phần trăm cho edge-tts."""
     percent = int(round((float(speed) - 1.0) * 100))
     return f"+{percent}%" if percent >= 0 else f"{percent}%"
 
@@ -35,6 +35,7 @@ class BGMStreamer:
     Huyền Huyễn, Mưa Đêm, Lofi) từ kho lưu trữ âm nhạc trực tuyến Internet Archive.
     """
 
+    # Từ khóa truy vấn kho nhạc cụ thật tương ứng từng thể loại
     GENRE_QUERIES = {
         "tienhiep": '(title:(guqin OR guzheng OR "chinese zither" OR "chinese classical") OR subject:(guqin OR guzheng)) AND mediatype:audio',
         "tieusao": '(title:(dizi OR xiao OR "chinese flute" OR "bamboo flute" OR erhu) OR subject:("chinese flute" OR erhu)) AND mediatype:audio',
@@ -43,6 +44,7 @@ class BGMStreamer:
         "lofi": '(title:("lofi chill" OR "chillhop" OR "relaxing piano" OR "ambient piano")) AND mediatype:audio',
     }
 
+    # Danh sách link MP3 dự phòng cố định tốc độ cao
     FALLBACK_TRACKS = {
         "tienhiep": [
             "https://archive.org/download/chinese-classical-music-guzheng/Chinese%20Classical%20Music%20-%20Guzheng.mp3",
@@ -97,6 +99,7 @@ class BGMStreamer:
                         for f in files:
                             fname = f.get("name", "")
                             size = int(f.get("size") or 0)
+                            # Chỉ chọn file MP3 bản nhạc thật (từ 800KB đến 15MB)
                             if fname.lower().endswith(".mp3") and 800_000 <= size <= 15_000_000:
                                 mp3_url = f"https://archive.org/download/{ident}/{requests.utils.quote(fname)}"
                                 found_urls.append(mp3_url)
@@ -116,8 +119,6 @@ class BGMStreamer:
 class ContextualTextPolisher:
     """
     Tầng 1: Bộ lọc Ngữ cảnh Tiếng Việt & Tiên Hiệp tức thì.
-    Sử dụng biểu thức chính quy có kiểm tra từ đứng trước/sau để sửa lỗi từ láy,
-    lỗi mất dấu, thiếu chữ mà không sửa nhầm ngữ cảnh.
     """
 
     CONTEXT_PHRASE_FIXES = [
@@ -211,7 +212,6 @@ async def _synthesize_audio_bytes(text: str, voice: str, rate_str: str) -> bytes
 
 @app.route("/")
 def index():
-    """Trang chủ hiển thị giao diện đọc truyện."""
     return render_template("index.html")
 
 
@@ -259,7 +259,6 @@ def api_bgm_stream():
 
 @app.route("/api/scrape", methods=["POST"])
 def api_scrape():
-    """API nhận URL chương truyện, bóc tách văn bản sạch, ảnh bìa và lưu lịch sử."""
     data = request.get_json(silent=True) or {}
     url = (data.get("url") or "").strip()
     custom_dict = data.get("custom_dict") or {}
@@ -269,31 +268,15 @@ def api_scrape():
         return jsonify({"error": "Vui lòng nhập đường dẫn (URL) của chương truyện!"}), 400
 
     try:
-        # Tương thích an toàn với cả bản scraper.py trả về 4 hoặc 5 giá trị
-        scrape_result = NovelScraper.fetch_chapter(url)
-        if len(scrape_result) >= 5:
-            title, raw_chunks, prev_url, next_url, cover_url = scrape_result[:5]
-        else:
-            title, raw_chunks, prev_url, next_url = scrape_result[:4]
-            cover_url = ""
-
+        title, raw_chunks, prev_url, next_url = NovelScraper.fetch_chapter(url)
         chunks = [
             ContextualTextPolisher.polish_chunk(c, custom_dict, enable_punct)
             for c in raw_chunks
         ]
-
-        # Tương thích an toàn với cả bản storage.py cũ hoặc mới
-        try:
-            history = HistoryManager.add_entry(
-                title, url, total_chunks=len(chunks), cover_url=cover_url
-            )
-        except TypeError:
-            history = HistoryManager.add_entry(title, url, total_chunks=len(chunks))
-
+        history = HistoryManager.add_entry(title, url, total_chunks=len(chunks))
         return jsonify({
             "title": title,
             "url": url,
-            "cover_url": cover_url,
             "chunks": chunks,
             "prev_url": prev_url,
             "next_url": next_url,
@@ -305,10 +288,6 @@ def api_scrape():
 
 @app.route("/api/ai-polish", methods=["POST"])
 def api_ai_polish():
-    """
-    Tầng 2: API dùng Gemini AI đọc hiểu ngữ cảnh sâu để sửa từ bị thiếu chữ, sai dấu thanh,
-    sai từ láy và chuẩn hóa dấu câu (Hỗ trợ tự động xoay vòng nhiều API Key).
-    """
     data = request.get_json(silent=True) or {}
     chunks = data.get("chunks") or []
     start_key_index = int(data.get("start_key_index") or 0)
@@ -402,7 +381,6 @@ def api_ai_polish():
 
 @app.route("/api/tts", methods=["GET"])
 def api_tts():
-    """API tạo và trả về luồng âm thanh MP3 cho từng đoạn văn (chunk)."""
     text = (request.args.get("text") or "").strip()
     voice = request.args.get("voice", "vi-VN-HoaiMyNeural")
     speed = float(request.args.get("speed", 1.0))
@@ -425,7 +403,6 @@ def api_tts():
 
 @app.route("/api/export-mp3", methods=["POST"])
 def api_export_mp3():
-    """API gộp toàn bộ chương truyện thành 1 file Audiobook MP3 duy nhất để tải về máy."""
     data = request.get_json(silent=True) or {}
     chunks = data.get("chunks") or []
     title = (data.get("title") or "chuong-truyen").strip()
