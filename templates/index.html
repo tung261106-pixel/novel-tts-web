@@ -96,7 +96,6 @@
             position: relative;
         }
 
-        /* LỚP HÌNH NỀN TOÀN TRANG WEB (FULL-SCREEN WALLPAPER) */
         body::before {
             content: "";
             position: fixed;
@@ -127,7 +126,7 @@
             justify-content: center;
         }
 
-        /* ================= 1. SIDEBAR (KÍNH MỜ XUYÊN THẤU NỀN) ================= */
+        /* ================= 1. SIDEBAR ================= */
         .sidebar {
             width: 310px;
             min-width: 310px;
@@ -607,7 +606,7 @@
             transition: width 0.3s ease;
         }
 
-        /* ================= KHUNG ĐỌC TRUYỆN & TRẠNG THÁI CHỜ TRONG SUỐT ================= */
+        /* ================= KHUNG ĐỌC TRUYỆN ================= */
         .reading-view {
             flex: 1;
             background-color: rgba(var(--surface-rgb), var(--panel-opacity));
@@ -624,7 +623,6 @@
             transition: background-color 0.3s ease;
         }
 
-        /* Khi chưa tải chương truyện: Mở trong suốt hoàn toàn khung giữa để nhìn trọn hình nền toàn trang */
         .reading-view.is-waiting {
             background-color: transparent;
             backdrop-filter: none;
@@ -1068,7 +1066,6 @@
 
     <!-- ================= 2. KHU VỰC ĐỌC CHÍNH ================= -->
     <main class="main-container">
-        <!-- Thanh nhập URL -->
         <div class="top-search-bar">
             <button class="mobile-menu-btn" onclick="toggleSidebar(true)">☰ Tủ sách</button>
             <div class="input-wrapper">
@@ -1086,7 +1083,6 @@
             </button>
         </div>
 
-        <!-- Thanh tiêu đề & Công cụ -->
         <div class="chapter-toolbar">
             <div class="toolbar-top">
                 <div class="chapter-identity">
@@ -1140,7 +1136,6 @@
             </div>
         </div>
 
-        <!-- Khung đọc truyện (Trong suốt hoàn toàn khi ở màn hình chờ để nhìn thấy nền toàn trang) -->
         <div id="readingView" class="reading-view is-waiting">
             <div class="waiting-glass-overlay">
                 <div class="waiting-badge-row">
@@ -1155,12 +1150,11 @@
                     <span class="hero-mini-pill">📖 Tự động lấy bìa truyện</span>
                     <span class="hero-mini-pill">🎵 Hòa tấu Cổ Cầm & Tiêu Sáo</span>
                     <span class="hero-mini-pill">🧠 Sửa dấu AI theo ngữ cảnh</span>
-                    <span class="hero-mini-pill">🔄 Đồng bộ Laptop & Điện thoại</span>
+                    <span class="hero-mini-pill">🛡️ Tự động vượt tường lửa 403</span>
                 </div>
             </div>
         </div>
 
-        <!-- Thanh điều khiển Player -->
         <div class="player-dock">
             <div class="transport-controls">
                 <button class="btn-transport btn-play-main" onclick="playAudio()">▶ Phát</button>
@@ -2069,7 +2063,7 @@
             }
         }
 
-        // ================= CÁC HÀM CỐT LÕI & ĐỒNG BỘ ẢNH BÌA =================
+        // ================= CÁC HÀM CỐT LÕI & CƠ CHẾ VƯỢT 403 TỪ TRÌNH DUYỆT =================
         async function pasteClipboard() {
             try {
                 const text = await navigator.clipboard.readText();
@@ -2224,6 +2218,30 @@
             } catch (e) {}
         }
 
+        // Cơ chế dự phòng: Dùng chính trình duyệt trên máy người dùng (IP Việt Nam) để tải HTML nếu IP máy chủ Render bị chặn 403
+        async function fetchHtmlFromClientBrowser(targetUrl) {
+            const encoded = encodeURIComponent(targetUrl);
+            const clientGateways = [
+                { url: `https://api.allorigins.win/get?url=${encoded}&disableCache=true`, type: "json" },
+                { url: `https://api.codetabs.com/v1/proxy?quest=${encoded}`, type: "text" },
+                { url: `https://corsproxy.io/?${encoded}`, type: "text" },
+            ];
+
+            for (const gw of clientGateways) {
+                try {
+                    const res = await fetch(gw.url);
+                    if (!res.ok) continue;
+                    const html = gw.type === "json" ? ((await res.json()).contents || "") : (await res.text());
+                    if (html && html.length > 800 && !html.toLowerCase().includes("<title>just a moment...</title>")) {
+                        return html;
+                    }
+                } catch (e) {
+                    continue;
+                }
+            }
+            return null;
+        }
+
         async function startScraping(urlOverride = "", resumeChunkIndex = 0) {
             ensureAudioContext();
             const urlInput = document.getElementById("urlInput");
@@ -2246,17 +2264,34 @@
             document.getElementById("prevChapBtn").disabled = true;
             document.getElementById("nextChapBtn").disabled = true;
 
+            const payload = {
+                url: targetUrl,
+                custom_dict: getCustomDict(),
+                enable_punct: document.getElementById("contextPunctToggle").checked,
+            };
+
             try {
-                const res = await fetch("/api/scrape", {
+                let res = await fetch("/api/scrape", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        url: targetUrl,
-                        custom_dict: getCustomDict(),
-                        enable_punct: document.getElementById("contextPunctToggle").checked,
-                    }),
+                    body: JSON.stringify(payload),
                 });
-                const data = await res.json();
+                let data = await res.json();
+
+                // Nếu Server Render bị chặn 403 -> Tự động dùng mạng trên trình duyệt của bạn tải hộ rồi gửi lên Server
+                if (!res.ok || data.error) {
+                    setStatus("Đang vượt tường lửa 403...", false);
+                    const clientHtml = await fetchHtmlFromClientBrowser(targetUrl);
+                    if (clientHtml) {
+                        payload.raw_html = clientHtml;
+                        res = await fetch("/api/scrape", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(payload),
+                        });
+                        data = await res.json();
+                    }
+                }
 
                 if (!res.ok || data.error) {
                     throw new Error(data.error || "Không thể tải chương truyện");
