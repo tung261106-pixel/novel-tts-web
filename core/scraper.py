@@ -20,7 +20,8 @@ except ImportError:
 
 class NovelScraper:
     """
-    Bộ bóc tách nội dung truyện chữ chống chặn 403 và chống bẫy chữ tượng hình (Honeypot/Obfuscation).
+    Bộ bóc tách nội dung truyện chữ chống chặn 403, chống bẫy chữ tượng hình
+    và kiểm tra an toàn thuộc tính thẻ HTML (chống lỗi NoneType).
     """
 
     USER_AGENTS = [
@@ -59,14 +60,13 @@ class NovelScraper:
         r"(?i)quảng\s+cáo.*",
     ]
 
-    # Biểu thức nhận diện nguyên âm có dấu đặc trưng của Tiếng Việt
+    # Nhận diện nguyên âm có dấu đặc trưng của Tiếng Việt
     VN_ACCENT_REGEX = re.compile(
         r"[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ"
         r"ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]"
     )
 
-    # Chỉ giữ lại chữ cái Latin/Tiếng Việt, chữ số và dấu câu văn học hợp lệ
-    # Loại bỏ hoàn toàn chữ tượng hình Ai Cập (U+13000..U+1342F), Canadian Syllabics, gạch dưới bẫy '_'...
+    # Chỉ giữ lại chữ cái Tiếng Việt, chữ số và dấu câu chuẩn (loại bỏ hoàn toàn chữ tượng hình & dấu '_')
     DISALLOWED_CHARS_REGEX = re.compile(
         r"[^a-zA-Z0-9\s.,!?;:'\"()\[\]\-–—…“”‘’/\\+%&\u00C0-\u024F\u1E00-\u1EFF]"
     )
@@ -75,33 +75,36 @@ class NovelScraper:
     _cffi_session = None
     _req_session = None
 
+    @staticmethod
+    def _is_alive_tag(el) -> bool:
+        """Kiểm tra thẻ BeautifulSoup còn tồn tại và chưa bị decompose (tránh lỗi NoneType)."""
+        return (
+            el is not None
+            and not getattr(el, "decomposed", False)
+            and isinstance(getattr(el, "attrs", None), dict)
+        )
+
     @classmethod
     def _count_vn_accents(cls, text: str) -> int:
-        """Đếm số lượng ký tự Tiếng Việt có dấu trong chuỗi để phân biệt văn bản thật và bẫy tượng hình."""
-        if not text:
+        """Đếm số lượng ký tự Tiếng Việt có dấu trong chuỗi."""
+        if not text or not isinstance(text, str):
             return 0
         return len(cls.VN_ACCENT_REGEX.findall(text))
 
     @classmethod
     def _is_trap_or_garbled_line(cls, line: str) -> bool:
-        """
-        Kiểm tra xem một dòng văn bản có phải là dòng bẫy chống cào (chữ tượng hình Ai Cập,
-        chuỗi ký tự nối bằng dấu '_', hoặc dòng dài không có bất kỳ dấu Tiếng Việt nào).
-        """
-        if not line:
+        """Kiểm tra xem một dòng có phải là bẫy chữ tượng hình hoặc chuỗi ký tự rác hay không."""
+        if not line or not isinstance(line, str):
             return True
 
-        # Nếu dòng chứa nhiều dấu gạch dưới '_' (đặc trưng của bẫy tượng hình trong ảnh)
         if line.count("_") >= 3:
             return True
 
-        # Kiểm tra tỷ lệ ký tự lạ (ngoài bảng chữ cái Tiếng Việt)
         cleaned = cls.DISALLOWED_CHARS_REGEX.sub("", line)
         if len(line) > 10 and (len(line) - len(cleaned)) / len(line) > 0.20:
             return True
 
-        # Một dòng văn xuôi dài trên 40 ký tự trong truyện Tiếng Việt bắt buộc phải có ít nhất 2 chữ có dấu
-        if len(cleaned) > 40 and cls._count_vn_accents(cleaned) < 2:
+        if len(cleaned) > 45 and cls._count_vn_accents(cleaned) < 2:
             return True
 
         return False
@@ -115,10 +118,6 @@ class NovelScraper:
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
             "Upgrade-Insecure-Requests": "1",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
         }
         if url:
             m = re.match(r"^(https?://[^/]+)", url)
@@ -127,12 +126,10 @@ class NovelScraper:
 
     @classmethod
     def _has_valid_vietnamese_chapter(cls, html: str) -> bool:
-        """
-        Đảm bảo mã HTML tải về thực sự chứa nội dung chương truyện Tiếng Việt
-        chứ không phải trang chặn Cloudflare hoặc trang bẫy chữ tượng hình Ai Cập.
-        """
-        if not html or len(html) < 800:
+        """Kiểm tra mã HTML tải về thực sự có nội dung chương truyện Tiếng Việt."""
+        if not html or not isinstance(html, str) or len(html) < 800:
             return False
+
         lower_html = html[:4000].lower()
         cloudflare_markers = [
             "<title>just a moment...</title>",
@@ -145,33 +142,30 @@ class NovelScraper:
         if any(marker in lower_html for marker in cloudflare_markers):
             return False
 
-        # Bóc thử văn bản ngoài thẻ script/style xem có đủ mật độ chữ Tiếng Việt có dấu không
         text_only = re.sub(r"(?is)<(script|style|head|nav|footer).*?>.*?</\1>", " ", html)
         text_only = re.sub(r"(?s)<[^>]+>", " ", text_only)
         text_only = cls.DISALLOWED_CHARS_REGEX.sub("", text_only)
 
-        # Một chương truyện thật phải có ít nhất 80 ký tự Tiếng Việt có dấu
-        if cls._count_vn_accents(text_only) >= 80:
+        if cls._count_vn_accents(text_only) >= 60:
             return True
 
-        # Kiểm tra thêm trong payload Next.js (nếu trang render qua __NEXT_DATA__ / __next_f)
-        if cls._count_vn_accents(html) >= 200:
+        if cls._count_vn_accents(html) >= 180:
             return True
 
         return False
 
     @classmethod
     def _download_html(cls, url: str, timeout: int = 20) -> str:
-        """Tải HTML qua 7 lớp bảo vệ và tự động loại bỏ các phản hồi bị dính bẫy chữ tượng hình."""
+        """Tải HTML qua 7 lớp bảo vệ và loại bỏ các phản hồi bị dính bẫy chữ tượng hình."""
         headers = cls._get_headers(url)
 
-        # Lớp 1: Dùng curl_cffi giả lập TLS trình duyệt thật
+        # Lớp 1: Dùng curl_cffi giả lập trình duyệt thật
         if cffi_requests is not None:
+            if cls._cffi_session is None:
+                cls._cffi_session = cffi_requests.Session()
             for browser_fp in ["chrome124", "safari17_0", "chrome120", "edge101"]:
                 try:
-                    # Dùng phiên mới nếu phiên cũ bị trang truyện đánh dấu trả về chữ tượng hình
-                    session = cffi_requests.Session()
-                    resp = session.get(
+                    resp = cls._cffi_session.get(
                         url,
                         headers=headers,
                         impersonate=browser_fp,
@@ -194,7 +188,7 @@ class NovelScraper:
                         }
                     )
                     resp = scraper.get(url, headers=headers, timeout=timeout)
-                    if resp.status_code == 200:
+                    if resp.status_code == 200 and resp.text:
                         resp.encoding = resp.apparent_encoding or "utf-8"
                         if cls._has_valid_vietnamese_chapter(resp.text):
                             return resp.text
@@ -203,8 +197,10 @@ class NovelScraper:
 
         # Lớp 3: Dùng Requests chuẩn
         try:
-            resp = requests.get(url, headers=headers, timeout=timeout)
-            if resp.status_code == 200:
+            if cls._req_session is None:
+                cls._req_session = requests.Session()
+            resp = cls._req_session.get(url, headers=headers, timeout=timeout)
+            if resp.status_code == 200 and resp.text:
                 resp.encoding = resp.apparent_encoding or "utf-8"
                 if cls._has_valid_vietnamese_chapter(resp.text):
                     return resp.text
@@ -217,7 +213,7 @@ class NovelScraper:
             resp = requests.get(ao_json_url, timeout=timeout)
             if resp.status_code == 200:
                 data = resp.json()
-                contents = data.get("contents") or ""
+                contents = (data.get("contents") or "") if isinstance(data, dict) else ""
                 if cls._has_valid_vietnamese_chapter(contents):
                     return contents
         except Exception:
@@ -234,30 +230,27 @@ class NovelScraper:
         for p_url in proxy_urls:
             try:
                 resp = requests.get(p_url, headers=headers, timeout=timeout)
-                if resp.status_code == 200:
+                if resp.status_code == 200 and resp.text:
                     resp.encoding = "utf-8"
                     if cls._has_valid_vietnamese_chapter(resp.text):
                         return resp.text
             except Exception:
                 continue
 
-        raise ValueError(f"Không thể truy cập trang web hoặc trang trả về dữ liệu chống bot tại URL: {url}")
+        raise ValueError(f"Không thể truy cập trang web (Lỗi 403) tại URL: {url}")
 
     @classmethod
     def _extract_nextjs_script_text(cls, soup: BeautifulSoup) -> str:
-        """
-        Trích xuất dự phòng nội dung chương truyện Tiếng Việt nằm trong các thẻ <script>
-        của Next.js (__NEXT_DATA__ hoặc self.__next_f.push) nếu DOM bên ngoài bị làm nhiễu.
-        """
+        """Trích xuất dự phòng nội dung chương Tiếng Việt nằm trong các thẻ <script> của Next.js."""
         candidates = []
-        for script in soup.find_all("script"):
-            raw = script.string or script.get_text() or ""
-            if not raw or len(raw) < 300:
-                continue
+        try:
+            for script in soup.find_all("script"):
+                if not cls._is_alive_tag(script):
+                    continue
+                raw = script.string or script.get_text() or ""
+                if not raw or len(raw) < 300:
+                    continue
 
-            # Giải mã các chuỗi văn bản trong script Next.js
-            try:
-                # Tìm các chuỗi dài bên trong ngoặc kép có chứa dấu Tiếng Việt
                 matches = re.findall(r'"((?:[^"\\]|\\.)*)"', raw)
                 for m in matches:
                     if len(m) < 200:
@@ -267,10 +260,11 @@ class NovelScraper:
                     except Exception:
                         decoded = m.replace("\\n", "\n").replace('\\"', '"')
 
-                    if cls._count_vn_accents(decoded) >= 60 and not cls._is_trap_or_garbled_line(decoded[:200]):
-                        candidates.append(decoded)
-            except Exception:
-                continue
+                    if isinstance(decoded, str) and cls._count_vn_accents(decoded) >= 60:
+                        if not cls._is_trap_or_garbled_line(decoded[:200]):
+                            candidates.append(decoded)
+        except Exception:
+            pass
 
         if not candidates:
             return ""
@@ -279,83 +273,106 @@ class NovelScraper:
 
     @classmethod
     def _remove_hidden_and_trap_elements(cls, soup: BeautifulSoup) -> None:
-        """Xóa toàn bộ các thẻ ẩn CSS và các thẻ chứa chữ tượng hình bẫy bot."""
-        # 1. Xóa các thẻ có thuộc tính ẩn hoặc style ẩn
-        for el in soup.find_all(True):
-            if el.name in ["html", "body", "main", "article", "section"]:
-                continue
-
-            if el.has_attr("hidden") or str(el.get("aria-hidden", "")).lower() == "true":
-                el.decompose()
-                continue
-
-            style = (el.get("style") or "").lower().replace(" ", "")
-            if any(
-                hidden_rule in style
-                for hidden_rule in [
-                    "display:none",
-                    "visibility:hidden",
-                    "opacity:0",
-                    "font-size:0",
-                    "height:0",
-                    "max-height:0",
-                    "left:-9999",
-                ]
-            ):
-                el.decompose()
-                continue
-
-            classes = " ".join(el.get("class", [])).lower()
-            if any(
-                c in classes.split()
-                for c in ["hidden", "sr-only", "invisible", "opacity-0", "text-[0px]", "select-none"]
-            ):
-                # Chỉ xóa nếu bên trong không phải là toàn bộ khung chính
-                if cls._count_vn_accents(el.get_text()) < 100:
-                    el.decompose()
+        """
+        Xóa toàn bộ các thẻ ẩn CSS và các thẻ chứa chữ tượng hình bẫy bot.
+        Kiểm tra _is_alive_tag nghiêm ngặt để không bao giờ xảy ra lỗi NoneType.
+        """
+        try:
+            to_decompose = []
+            for el in soup.find_all(True):
+                if not cls._is_alive_tag(el):
+                    continue
+                if el.name in ("html", "body", "main", "article", "section", "head"):
                     continue
 
-        # 2. Quét từng đoạn văn (<p>, <div>, <span>): nếu chứa chữ tượng hình hoặc dòng bẫy thì xóa bỏ
-        for node in soup.find_all(["p", "span", "div"]):
-            # Chỉ kiểm tra các thẻ lá hoặc thẻ đoạn ngắn (không xóa nhầm thẻ cha bao ngoài)
-            if node.find(["p", "div", "article", "section"]):
-                continue
-            txt = node.get_text(strip=True)
-            if txt and cls._is_trap_or_garbled_line(txt):
-                node.decompose()
+                attrs = el.attrs
+                if "hidden" in attrs or str(attrs.get("aria-hidden") or "").lower() == "true":
+                    to_decompose.append(el)
+                    continue
+
+                style = str(attrs.get("style") or "").lower().replace(" ", "")
+                if style and any(
+                    rule in style
+                    for rule in (
+                        "display:none",
+                        "visibility:hidden",
+                        "opacity:0",
+                        "font-size:0",
+                        "height:0",
+                        "max-height:0",
+                        "left:-9999",
+                    )
+                ):
+                    to_decompose.append(el)
+                    continue
+
+                raw_cls = attrs.get("class") or []
+                if isinstance(raw_cls, (list, tuple)):
+                    cls_list = [str(c).lower() for c in raw_cls]
+                elif isinstance(raw_cls, str):
+                    cls_list = raw_cls.lower().split()
+                else:
+                    cls_list = []
+
+                if any(c in cls_list for c in ("hidden", "sr-only", "invisible", "opacity-0", "text-[0px]")):
+                    if cls._count_vn_accents(el.get_text()) < 100:
+                        to_decompose.append(el)
+
+            for el in to_decompose:
+                if cls._is_alive_tag(el):
+                    el.decompose()
+
+            # Quét các thẻ đoạn ngắn chứa chữ tượng hình hoặc dòng bẫy '_'
+            trap_nodes = []
+            for node in soup.find_all(["p", "span", "div"]):
+                if not cls._is_alive_tag(node):
+                    continue
+                if node.find(["p", "div", "article", "section"]):
+                    continue
+                txt = node.get_text(strip=True)
+                if txt and cls._is_trap_or_garbled_line(txt):
+                    trap_nodes.append(node)
+
+            for node in trap_nodes:
+                if cls._is_alive_tag(node):
+                    node.decompose()
+        except Exception:
+            pass
 
     @classmethod
     def _extract_cover_from_soup(cls, soup: BeautifulSoup, base_url: str) -> str:
         """Tìm link ảnh bìa từ thẻ meta og:image hoặc các class ảnh bìa phổ biến."""
-        cover_selectors = [
-            ".book-img img",
-            ".books .book img",
-            ".info-holder .books img",
-            ".book-cover img",
-            ".novel-cover img",
-            ".thumb img",
-            "img.cover",
-            "img[alt*='bìa']",
-        ]
-        for sel in cover_selectors:
-            img = soup.select_one(sel)
-            if img:
-                src = (img.get("data-src") or img.get("src") or "").strip()
-                if src and not src.startswith("data:"):
-                    return urljoin(base_url, src)
+        try:
+            cover_selectors = [
+                ".book-img img",
+                ".books .book img",
+                ".info-holder .books img",
+                ".book-cover img",
+                ".novel-cover img",
+                ".thumb img",
+                "img.cover",
+                "img[alt*='bìa']",
+            ]
+            for sel in cover_selectors:
+                img = soup.select_one(sel)
+                if cls._is_alive_tag(img):
+                    src = str(img.attrs.get("data-src") or img.attrs.get("src") or "").strip()
+                    if src and not src.startswith("data:"):
+                        return urljoin(base_url, src)
 
-        for meta_sel in [
-            'meta[property="og:image"]',
-            'meta[name="og:image"]',
-            'meta[name="twitter:image"]',
-            'link[rel="image_src"]',
-        ]:
-            tag = soup.select_one(meta_sel)
-            if tag:
-                content = (tag.get("content") or tag.get("href") or "").strip()
-                if content and not any(x in content.lower() for x in ["logo", "favicon", "default-share"]):
-                    return urljoin(base_url, content)
-
+            for meta_sel in [
+                'meta[property="og:image"]',
+                'meta[name="og:image"]',
+                'meta[name="twitter:image"]',
+                'link[rel="image_src"]',
+            ]:
+                tag = soup.select_one(meta_sel)
+                if cls._is_alive_tag(tag):
+                    content = str(tag.attrs.get("content") or tag.attrs.get("href") or "").strip()
+                    if content and not any(x in content.lower() for x in ("logo", "favicon", "default-share")):
+                        return urljoin(base_url, content)
+        except Exception:
+            pass
         return ""
 
     @classmethod
@@ -380,49 +397,56 @@ class NovelScraper:
 
     @classmethod
     def parse_chapter_html(cls, html_text: str, url: str) -> Tuple[str, List[str], Optional[str], Optional[str], str]:
-        """Phân tích mã HTML thành (title, chunks, prev_url, next_url, cover_url) với bộ lọc chống chữ tượng hình."""
-        soup = BeautifulSoup(html_text, "lxml")
+        """Phân tích mã HTML thành (title, chunks, prev_url, next_url, cover_url) an toàn tuyệt đối."""
+        soup = BeautifulSoup(html_text or "", "lxml")
 
         prev_url, next_url = cls._extract_nav_links(soup, url)
         cover_url = cls.extract_novel_cover(soup, url)
 
-        # Lưu dự phòng văn bản Tiếng Việt trong script Next.js trước khi xóa thẻ <script>
         nextjs_backup_text = cls._extract_nextjs_script_text(soup)
 
-        for tag in soup(["script", "style", "nav", "footer", "iframe", "noscript", "aside", "form", "svg", "canvas"]):
-            tag.decompose()
+        for tag in list(soup(["script", "style", "nav", "footer", "iframe", "noscript", "aside", "form", "svg", "canvas"])):
+            if cls._is_alive_tag(tag):
+                tag.decompose()
 
         title = cls._extract_chapter_title(soup, url)
 
-        for tag in soup(["header", "button", "h1"]):
-            tag.decompose()
+        for tag in list(soup(["header", "button", "h1"])):
+            if cls._is_alive_tag(tag):
+                tag.decompose()
 
-        # Xóa các thẻ quảng cáo, điều hướng và các thẻ ẩn / bẫy chữ tượng hình
-        for junk_div in soup.find_all(
-            attrs={
-                "class": re.compile(r"(ads|advert|banner|nav|pagination|comment|social|breadcrumb)", re.I)
-            }
+        for junk_div in list(
+            soup.find_all(
+                attrs={
+                    "class": re.compile(r"(ads|advert|banner|nav|pagination|comment|social|breadcrumb)", re.I)
+                }
+            )
         ):
-            junk_div.decompose()
+            if cls._is_alive_tag(junk_div):
+                junk_div.decompose()
 
-        for el in soup.find_all(["span", "div", "a", "li"]):
+        for el in list(soup.find_all(["span", "div", "a", "li"])):
+            if not cls._is_alive_tag(el):
+                continue
             el_text = el.get_text(strip=True)
             if re.match(r"(?i)^(bản\s*dịch|dịch\s*ai|convert|bản\s*dịch\s*dịch\s*ai\s*convert)$", el_text):
                 el.decompose()
 
         cls._remove_hidden_and_trap_elements(soup)
 
-        # Tìm khung chứa nội dung chương dựa trên số lượng chữ Tiếng Việt có dấu (không đếm ký tự rác)
+        # Chọn khung chứa nhiều chữ Tiếng Việt có dấu nhất (loại bỏ hoàn toàn khung chữ tượng hình)
         content_node = None
         for selector in cls.CONTENT_SELECTORS:
             node = soup.select_one(selector)
-            if node and cls._count_vn_accents(node.get_text(strip=True)) >= 60:
+            if cls._is_alive_tag(node) and cls._count_vn_accents(node.get_text(strip=True)) >= 60:
                 content_node = node
                 break
 
         if not content_node:
             candidates = []
             for div in soup.find_all(["article", "main", "section", "div"]):
+                if not cls._is_alive_tag(div):
+                    continue
                 txt = div.get_text(" ", strip=True)
                 vn_score = cls._count_vn_accents(txt)
                 if vn_score >= 60:
@@ -430,7 +454,6 @@ class NovelScraper:
 
             if candidates:
                 max_vn_score = max(c[0] for c in candidates)
-                # Chọn thẻ con sâu nhất có chứa ít nhất 85% lượng chữ Tiếng Việt của trang (tránh lấy thẻ bao ngoài cùng)
                 best_candidates = [c for c in candidates if c[0] >= max_vn_score * 0.85]
                 best_candidates.sort(key=lambda x: x[1])
                 content_node = best_candidates[0][2]
@@ -438,22 +461,23 @@ class NovelScraper:
                 content_node = soup.body
 
         cleaned_text = ""
-        if content_node:
-            for br in content_node.find_all("br"):
-                br.replace_with("\n")
-            for block_tag in content_node.find_all(["p", "div", "h2", "h3", "h4", "li"]):
-                block_tag.append("\n")
+        if content_node and cls._is_alive_tag(content_node):
+            for br in list(content_node.find_all("br")):
+                if cls._is_alive_tag(br):
+                    br.replace_with("\n")
+            for block_tag in list(content_node.find_all(["p", "div", "h2", "h3", "h4", "li"])):
+                if cls._is_alive_tag(block_tag):
+                    block_tag.append("\n")
 
             raw_text = content_node.get_text()
             cleaned_text = cls._clean_text(raw_text)
 
-        # Nếu văn bản ngoài DOM bị rỗng hoặc quá ngắn (do web giấu chữ thật trong script Next.js), dùng bản backup
         if cls._count_vn_accents(cleaned_text) < 50 and cls._count_vn_accents(nextjs_backup_text) >= 50:
             cleaned_text = cls._clean_text(nextjs_backup_text)
 
         if len(cleaned_text) < 50 or cls._count_vn_accents(cleaned_text) < 30:
             raise ValueError(
-                "Trang truyện đang trả về văn bản bẫy chống bot (chữ tượng hình). Vui lòng bấm Tải lại sau vài giây!"
+                "Không tìm thấy văn bản Tiếng Việt hợp lệ (trang nguồn đang bật chế độ chống bot). Vui lòng thử tải lại!"
             )
 
         chunks = cls.split_into_chunks(cleaned_text, max_chars=450)
@@ -498,9 +522,9 @@ class NovelScraper:
         ]
         for sel in title_selectors:
             node = soup.select_one(sel)
-            if node:
+            if cls._is_alive_tag(node):
                 text = re.sub(r"\s+", " ", node.get_text(strip=True))
-                if text and len(text) > 1:
+                if text and len(text) > 1 and not cls._is_trap_or_garbled_line(text):
                     chap_name = text
                     break
 
@@ -527,12 +551,20 @@ class NovelScraper:
         next_url: Optional[str] = None
 
         def _is_valid_href(tag) -> Optional[str]:
-            if not tag:
+            if not cls._is_alive_tag(tag):
                 return None
-            classes = " ".join(tag.get("class", [])).lower()
-            if "disabled" in classes or "isdisabled" in classes or tag.has_attr("disabled"):
+            attrs = tag.attrs
+            raw_class = attrs.get("class") or []
+            if isinstance(raw_class, (list, tuple)):
+                classes = " ".join(str(c) for c in raw_class).lower()
+            elif isinstance(raw_class, str):
+                classes = raw_class.lower()
+            else:
+                classes = ""
+
+            if "disabled" in classes or "isdisabled" in classes or "disabled" in attrs:
                 return None
-            href = (tag.get("href") or "").strip()
+            href = str(attrs.get("href") or "").strip()
             if not href or href.startswith("#") or href.lower().startswith("javascript:"):
                 return None
             return urljoin(base_url, href)
@@ -559,7 +591,7 @@ class NovelScraper:
                     continue
 
                 text = a_tag.get_text(" ", strip=True).lower()
-                title_attr = (a_tag.get("title") or "").lower()
+                title_attr = str(a_tag.attrs.get("title") or "").lower()
                 combined = f"{text} {title_attr}"
 
                 if not next_url and re.search(r"(chương\s+tiếp|chương\s+sau|tiếp\s+theo|next\s+chapter)", combined):
@@ -583,6 +615,9 @@ class NovelScraper:
     @classmethod
     def _clean_text(cls, text: str) -> str:
         """Làm sạch từng dòng văn bản, loại bỏ mọi dòng chữ tượng hình hoặc ký tự lạ."""
+        if not text or not isinstance(text, str):
+            return ""
+
         lines = text.splitlines()
         cleaned_lines = []
 
@@ -591,11 +626,9 @@ class NovelScraper:
             if not raw_line:
                 continue
 
-            # Loại bỏ ngay nếu là dòng bẫy chống cào (chứa chữ tượng hình hoặc chuỗi '_')
             if cls._is_trap_or_garbled_line(raw_line):
                 continue
 
-            # Lọc bỏ toàn bộ ký tự ngoài bảng chữ cái Tiếng Việt & dấu câu chuẩn
             line = cls.DISALLOWED_CHARS_REGEX.sub("", raw_line)
             line = re.sub(r"\s+", " ", line).strip()
             if not line:
