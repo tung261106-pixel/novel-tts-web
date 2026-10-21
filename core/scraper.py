@@ -1,5 +1,7 @@
 # File: core/scraper.py
 import re
+import time
+import random
 from typing import Tuple, List, Optional
 from urllib.parse import urljoin, quote
 import requests
@@ -17,19 +19,22 @@ except ImportError:
 
 
 class NovelScraper:
-    """Bộ bóc tách nội dung truyện chữ, link chuyển chương và ảnh bìa truyện tự động."""
+    """Bộ bóc tách nội dung truyện chữ chống chặn 403 đa tầng với phiên kết nối bền vững."""
 
-    HEADERS = {
-        "User-Agent": (
+    USER_AGENTS = [
+        (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/128.0.0.0 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
         ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://www.google.com.vn/",
-        "Upgrade-Insecure-Requests": "1",
-    }
+        (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15"
+        ),
+        (
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+        ),
+    ]
 
     CONTENT_SELECTORS = [
         "#chapter-c",
@@ -53,48 +58,118 @@ class NovelScraper:
     ]
 
     _cover_cache = {}
+    _cffi_session = None
+    _cloud_session = None
+    _req_session = None
+
+    @classmethod
+    def _get_headers(cls, url: str = "") -> dict:
+        headers = {
+            "User-Agent": random.choice(cls.USER_AGENTS),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "Upgrade-Insecure-Requests": "1",
+        }
+        if url:
+            m = re.match(r"^(https?://[^/]+)", url)
+            headers["Referer"] = m.group(1) + "/" if m else "https://www.google.com.vn/"
+        return headers
+
+    @classmethod
+    def _is_valid_novel_html(cls, html: str) -> bool:
+        """Kiểm tra chắc chắn HTML tải về là trang truyện thật chứ không phải trang chặn Cloudflare."""
+        if not html or len(html) < 600:
+            return False
+        lower_html = html[:4000].lower()
+        cloudflare_markers = [
+            "<title>just a moment...</title>",
+            "<title>attention required! | cloudflare</title>",
+            "cf-browser-verification",
+            "challenge-platform",
+            "enable javascript and cookies to continue",
+            "access denied |",
+        ]
+        if any(marker in lower_html for marker in cloudflare_markers):
+            return False
+        return True
 
     @classmethod
     def _download_html(cls, url: str, timeout: int = 20) -> str:
-        """Tải HTML qua 4 lớp bảo vệ để tránh lỗi 403 Forbidden trên Render."""
+        """Tải HTML qua 7 lớp bảo vệ + Giữ Cookie phiên để không bị chặn 403 khi đọc nhiều chương."""
+        headers = cls._get_headers(url)
+
+        # Lớp 1: Dùng phiên curl_cffi cố định với nhiều cấu hình trình duyệt (Chrome / Safari / Edge)
         if cffi_requests is not None:
-            try:
-                resp = cffi_requests.get(
-                    url, headers=cls.HEADERS, impersonate="chrome120", timeout=timeout
-                )
-                if resp.status_code == 200 and len(resp.text) > 500:
-                    return resp.text
-            except Exception:
-                pass
+            if cls._cffi_session is None:
+                cls._cffi_session = cffi_requests.Session()
+            for browser_fp in ["chrome124", "chrome120", "safari17_0", "edge101"]:
+                try:
+                    resp = cls._cffi_session.get(
+                        url,
+                        headers=headers,
+                        impersonate=browser_fp,
+                        timeout=timeout,
+                    )
+                    if resp.status_code == 200 and cls._is_valid_novel_html(resp.text):
+                        return resp.text
+                except Exception:
+                    continue
 
+        # Lớp 2: Dùng phiên Cloudscraper cố định
         if cloudscraper is not None:
-            try:
-                scraper = cloudscraper.create_scraper(
-                    browser={"browser": "chrome", "platform": "windows", "mobile": False}
-                )
-                resp = scraper.get(url, headers=cls.HEADERS, timeout=timeout)
-                if resp.status_code == 200 and len(resp.text) > 500:
-                    resp.encoding = resp.apparent_encoding or "utf-8"
-                    return resp.text
-            except Exception:
-                pass
+            for mobile_mode in [False, True]:
+                try:
+                    scraper = cloudscraper.create_scraper(
+                        browser={
+                            "browser": "chrome",
+                            "platform": "ios" if mobile_mode else "windows",
+                            "mobile": mobile_mode,
+                        }
+                    )
+                    resp = scraper.get(url, headers=headers, timeout=timeout)
+                    if resp.status_code == 200 and cls._is_valid_novel_html(resp.text):
+                        resp.encoding = resp.apparent_encoding or "utf-8"
+                        return resp.text
+                except Exception:
+                    continue
 
+        # Lớp 3: Dùng phiên Requests chuẩn
         try:
-            resp = requests.get(url, headers=cls.HEADERS, timeout=timeout)
-            if resp.status_code == 200 and len(resp.text) > 500:
+            if cls._req_session is None:
+                cls._req_session = requests.Session()
+            resp = cls._req_session.get(url, headers=headers, timeout=timeout)
+            if resp.status_code == 200 and cls._is_valid_novel_html(resp.text):
                 resp.encoding = resp.apparent_encoding or "utf-8"
                 return resp.text
         except Exception:
             pass
 
+        # Lớp 4: Cổng AllOrigins JSON Mode (Ổn định hơn bản /raw khi bị giới hạn)
+        try:
+            ao_json_url = f"https://api.allorigins.win/get?url={quote(url, safe='')}&disableCache=true"
+            resp = requests.get(ao_json_url, timeout=timeout)
+            if resp.status_code == 200:
+                data = resp.json()
+                contents = data.get("contents") or ""
+                if cls._is_valid_novel_html(contents):
+                    return contents
+        except Exception:
+            pass
+
+        # Lớp 5, 6, 7: Hệ thống 4 cổng Proxy xoay vòng dự phòng
+        encoded_url = quote(url, safe="")
         proxy_urls = [
-            f"https://api.allorigins.win/raw?url={quote(url, safe='')}",
-            f"https://api.codetabs.com/v1/proxy?quest={quote(url, safe='')}",
+            f"https://api.allorigins.win/raw?url={encoded_url}",
+            f"https://api.codetabs.com/v1/proxy?quest={encoded_url}",
+            f"https://corsproxy.io/?{encoded_url}",
+            f"https://thingproxy.freeboard.io/fetch/{url}",
         ]
         for p_url in proxy_urls:
             try:
-                resp = requests.get(p_url, timeout=timeout)
-                if resp.status_code == 200 and len(resp.text) > 500:
+                resp = requests.get(p_url, headers=headers, timeout=timeout)
+                if resp.status_code == 200 and cls._is_valid_novel_html(resp.text):
                     resp.encoding = "utf-8"
                     return resp.text
             except Exception:
@@ -105,7 +180,6 @@ class NovelScraper:
     @classmethod
     def _extract_cover_from_soup(cls, soup: BeautifulSoup, base_url: str) -> str:
         """Tìm link ảnh bìa từ thẻ meta og:image hoặc các class ảnh bìa phổ biến."""
-        # 1. Tìm trong các thẻ img chứa class/id bìa truyện
         cover_selectors = [
             ".book-img img",
             ".books .book img",
@@ -123,7 +197,6 @@ class NovelScraper:
                 if src and not src.startswith("data:"):
                     return urljoin(base_url, src)
 
-        # 2. Tìm trong thẻ Meta OpenGraph / Twitter Image
         for meta_sel in [
             'meta[property="og:image"]',
             'meta[name="og:image"]',
@@ -141,39 +214,32 @@ class NovelScraper:
     @classmethod
     def extract_novel_cover(cls, chapter_soup: BeautifulSoup, chapter_url: str) -> str:
         """
-        Trích xuất ảnh bìa truyện từ trang chương hoặc tự động lùi về trang chủ của bộ truyện
-        để lấy ảnh bìa chính xác nhất (có bộ nhớ đệm để không phải tải lại nhiều lần).
+        Trích xuất ảnh bìa và lưu đệm theo tên truyện để tránh gửi thêm request phụ
+        gây chạm ngưỡng Rate Limit 403 khi chuyển chương liên tục.
         """
-        # Suy luận URL gốc của bộ truyện (VD: .../gia-thien/chuong-1050 -> .../gia-thien)
         novel_base_url = re.sub(r"/(?:chuong|chapter)-\d+.*$", "", chapter_url, flags=re.I)
         if novel_base_url in cls._cover_cache:
             return cls._cover_cache[novel_base_url]
 
-        # Thử lấy trực tiếp trên trang chương hiện tại
         cover_url = cls._extract_cover_from_soup(chapter_soup, chapter_url)
 
-        # Nếu trang chương không có ảnh bìa, tự động kiểm tra trang thông tin gốc của truyện
         if not cover_url and novel_base_url != chapter_url:
             try:
-                novel_html = cls._download_html(novel_base_url, timeout=8)
+                novel_html = cls._download_html(novel_base_url, timeout=6)
                 novel_soup = BeautifulSoup(novel_html, "lxml")
                 cover_url = cls._extract_cover_from_soup(novel_soup, novel_base_url)
             except Exception:
                 pass
 
-        if cover_url:
-            cls._cover_cache[novel_base_url] = cover_url
+        # Lưu vào cache (kể cả khi rỗng) để các chương sau không gọi lặp lại nữa
+        cls._cover_cache[novel_base_url] = cover_url
         return cover_url
 
     @classmethod
-    def fetch_chapter(cls, url: str, timeout: int = 20) -> Tuple[str, List[str], Optional[str], Optional[str], str]:
-        """
-        Tải trang web, trích xuất: (title, chunks, prev_url, next_url, cover_url)
-        """
-        html_text = cls._download_html(url, timeout=timeout)
+    def parse_chapter_html(cls, html_text: str, url: str) -> Tuple[str, List[str], Optional[str], Optional[str], str]:
+        """Phân tích mã HTML thành (title, chunks, prev_url, next_url, cover_url)."""
         soup = BeautifulSoup(html_text, "lxml")
 
-        # 1. Lấy link chuyển chương & ảnh bìa trước khi xóa các thẻ phụ
         prev_url, next_url = cls._extract_nav_links(soup, url)
         cover_url = cls.extract_novel_cover(soup, url)
 
@@ -237,6 +303,12 @@ class NovelScraper:
                 chunks.insert(0, f"{title}.")
 
         return title, chunks, prev_url, next_url, cover_url
+
+    @classmethod
+    def fetch_chapter(cls, url: str, timeout: int = 20) -> Tuple[str, List[str], Optional[str], Optional[str], str]:
+        """Tải trang web và bóc tách nội dung chương truyện."""
+        html_text = cls._download_html(url, timeout=timeout)
+        return cls.parse_chapter_html(html_text, url)
 
     @classmethod
     def _extract_chapter_title(cls, soup: BeautifulSoup, url: str) -> str:
