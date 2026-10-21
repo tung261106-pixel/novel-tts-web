@@ -1,9 +1,8 @@
 # File: core/scraper.py
 import re
-import json
-import random
+import time
 from typing import Tuple, List, Optional
-from urllib.parse import urljoin, quote
+from urllib.parse import urljoin, quote, urlparse
 import requests
 from bs4 import BeautifulSoup
 
@@ -20,26 +19,20 @@ except ImportError:
 
 class NovelScraper:
     """
-    Bộ bóc tách nội dung truyện chữ đa tầng:
-    - Chặn đứng màn hình tường lửa 'Đang kiểm tra linh căn đạo hữu' & bẫy chữ tượng hình.
-    - Tự động chuyển hướng sang hệ thống Kho Truyện Dự Phòng (TruyenFull / SSTruyen / Jina)
-      để lấy toàn bộ nội dung chương truyện Tiếng Việt chuẩn xác.
+    Bộ bóc tách nội dung truyện chữ CHỈ LẤY TỪ ĐÚNG URL NGƯỜI DÙNG DÁN VÀO:
+    - Đồng bộ 100% chữ ký TLS/HTTP2 nguyên bản của curl_cffi (không ghi đè User-Agent gây xung đột).
+    - Tự động vượt màn hình 'Đang kiểm tra linh căn đạo hữu' và lọc sạch bẫy chữ tượng hình.
     """
 
-    USER_AGENTS = [
-        (
+    STANDARD_HEADERS = {
+        "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         ),
-        (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15"
-        ),
-        (
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
-        ),
-    ]
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Upgrade-Insecure-Requests": "1",
+    }
 
     CONTENT_SELECTORS = [
         "#chapter-c",
@@ -47,42 +40,36 @@ class NovelScraper:
         "#vungdoc",
         ".vung-doc",
         "#chapt-content",
-        ".content.container1",
         ".box-chap",
         "#chapter-content",
         ".chapter-content",
         "#content",
         ".entry-content",
         "article",
+        "main",
     ]
 
-    # Các mẫu câu rác giao diện và màn hình chặn Bot của truyendich.space
-    JUNK_PATTERNS = [
-        r"(?i)^\s*(chương\s+trước|chương\s+sau|chương\s+tiếp|mục\s+lục|báo\s+lỗi\s+chương|bình\s+luận)\s*$",
-        r"(?i)^\s*(bản\s*dịch|dịch\s*ai|convert|\s|/|\|)+$",
-        r"(?i).*xác\s+thực\s+bảo\s+mật.*",
-        r"(?i).*đang\s+kiểm\s+tra\s+linh\s+căn.*",
-        r"(?i).*quá\s+trình\s+này\s+diễn\s+ra\s+tự\s+động.*",
-        r"(?i).*quản\s+lý\s+tên\s+riêng.*",
-        r"(?i).*bôi\s+đen\s+chữ\s+trong\s+chương\s+truyện.*",
-        r"(?i).*không\s+tìm\s+thấy\s+chương\s+phù\s+hợp.*",
-        r"(?i).*chưa\s+có\s+tên\s+nào.*",
+    # Các cụm từ giao diện / màn hình chặn Bot của truyendich.space cần loại bỏ
+    INLINE_UI_JUNK = [
+        r"(?i)xác\s+thực\s+bảo\s+mật",
+        r"(?i)đang\s+kiểm\s+tra\s+linh\s+căn\s+đạo\s+hữu\.?\.?",
+        r"(?i)quá\s+trình\s+này\s+diễn\s+ra\s+tự\s+động",
+        r"(?i)nghe\s+truyện\s*\(tts\)",
+        r"(?i)quản\s+lý\s+tên\s+riêng",
+        r"(?i)cài\s+đặt\s+giao\s+diện",
+        r"(?i)chưa\s+có\s+tên\s+nào",
+        r"(?i)bôi\s+đen\s+chữ\s+trong\s+chương\s+truyện\s+rồi\s+chọn\s*[\"“]?thêm\s+tên[\"”]?\s*để\s+thêm\s+nhanh\.?",
+        r"(?i)mục\s+lục\s+\d+\s+chương",
+        r"(?i)không\s+tìm\s+thấy\s+chương\s+phù\s+hợp\.?",
+    ]
+
+    JUNK_LINE_PATTERNS = [
+        r"(?i)^\s*(chương\s+trước|chương\s+sau|chương\s+tiếp|mục\s+lục|danh\s+sách\s+chương|báo\s+lỗi\s+chương|bình\s+luận)\s*$",
+        r"(?i)^\s*(bản\s*dịch|dịch\s*ai|convert|\d+\s+từ|\s|/|\|)+$",
         r"(?i)hãy\s+bấm\s+vào\s+đây\s+để\s+báo\s+lỗi.*",
         r"(?i)nguồn\s*:\s*http.*",
         r"(?i)truyện\s+được\s+đăng\s+tại.*",
         r"(?i)quảng\s+cáo.*",
-    ]
-
-    # Các dấu hiệu nhận biết trang đang bị khóa bởi màn hình kiểm tra bảo mật
-    ANTIBOT_CHALLENGE_MARKERS = [
-        "đang kiểm tra linh căn",
-        "xác thực bảo mật",
-        "không tìm thấy chương phù hợp",
-        "bôi đen chữ trong chương truyện",
-        "<title>just a moment...</title>",
-        "cf-browser-verification",
-        "challenge-platform",
-        "enable javascript and cookies to continue",
     ]
 
     # Nhận diện nguyên âm có dấu đặc trưng của Tiếng Việt
@@ -91,19 +78,17 @@ class NovelScraper:
         r"ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]"
     )
 
-    # Chỉ giữ lại chữ cái Tiếng Việt, chữ số và dấu câu văn học hợp lệ
+    # Chỉ giữ lại chữ cái Tiếng Việt, chữ số và dấu câu văn học hợp lệ (loại bỏ chữ tượng hình & dấu '_')
     DISALLOWED_CHARS_REGEX = re.compile(
         r"[^a-zA-Z0-9\s.,!?;:'\"()\[\]\-–—…“”‘’/\\+%&\u00C0-\u024F\u1E00-\u1EFF]"
     )
 
-    # Ngưỡng tối thiểu của một chương truyện thật (chống lấy nhầm thông báo ngắn 200-300 chữ)
-    MIN_VALID_CHAPTER_CHARS = 1000
-    MIN_VALID_VN_ACCENTS = 180
+    # Một chương truyện thật (sau khi đã xóa chữ tượng hình & thông báo bảo mật) phải có ít nhất:
+    MIN_VALID_CHAPTER_CHARS = 600
+    MIN_VALID_VN_ACCENTS = 120
 
     _cover_cache = {}
-    _working_mirror_cache = {}
-    _cffi_session = None
-    _req_session = None
+    _cffi_sessions = {}
 
     @staticmethod
     def _is_alive_tag(el) -> bool:
@@ -116,19 +101,14 @@ class NovelScraper:
 
     @classmethod
     def _count_vn_accents(cls, text: str) -> int:
-        """Đếm số lượng ký tự Tiếng Việt có dấu trong chuỗi."""
         if not text or not isinstance(text, str):
             return 0
         return len(cls.VN_ACCENT_REGEX.findall(text))
 
     @classmethod
     def _is_trap_or_garbled_line(cls, line: str) -> bool:
-        """Kiểm tra xem một dòng có phải là bẫy chữ tượng hình, chuỗi '_' hoặc thông báo chặn Bot."""
+        """Kiểm tra dòng bẫy chữ tượng hình Ai Cập, chuỗi '_' hoặc dòng thông báo chặn Bot."""
         if not line or not isinstance(line, str):
-            return True
-
-        lower_line = line.lower()
-        if any(marker in lower_line for marker in cls.ANTIBOT_CHALLENGE_MARKERS):
             return True
 
         if line.count("_") >= 3:
@@ -144,192 +124,26 @@ class NovelScraper:
         return False
 
     @classmethod
-    def _get_headers(cls, url: str = "") -> dict:
-        headers = {
-            "User-Agent": random.choice(cls.USER_AGENTS),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Cache-Control": "no-cache",
-            "Pragma": "no-cache",
-            "Upgrade-Insecure-Requests": "1",
-        }
-        if url:
-            m = re.match(r"^(https?://[^/]+)", url)
-            headers["Referer"] = m.group(1) + "/" if m else "https://www.google.com.vn/"
-        return headers
-
-    @classmethod
-    def _has_valid_vietnamese_chapter(cls, html: str) -> bool:
+    def _build_google_translate_proxy_url(cls, url: str) -> str:
         """
-        Kiểm tra mã HTML tải về thực sự có nội dung chương truyện dài (>= 1000 ký tự, >= 180 dấu Tiếng Việt)
-        và KHÔNG bị dính màn hình 'Đang kiểm tra linh căn đạo hữu'.
+        Tạo link đi qua Google Translate Proxy cho đúng URL gốc.
+        Đặt ngôn ngữ nguồn là 'es' (Tây Ban Nha) và đích là 'vi' (Tiếng Việt) để máy chủ Google
+        tải trang bằng IP của Google nhưng giữ nguyên 100% câu chữ Tiếng Việt gốc.
         """
-        if not html or not isinstance(html, str) or len(html) < 1500:
-            return False
-
-        text_only = re.sub(r"(?is)<(script|style|head|nav|footer).*?>.*?</\1>", "\n", html)
-        text_only = re.sub(r"(?s)<[^>]+>", "\n", text_only)
-
-        cleaned = cls._clean_text(text_only)
-        if len(cleaned) >= cls.MIN_VALID_CHAPTER_CHARS and cls._count_vn_accents(cleaned) >= cls.MIN_VALID_VN_ACCENTS:
-            return True
-
-        return False
-
-    @classmethod
-    def _raw_http_get(cls, url: str, timeout: int = 14) -> str:
-        """Tải HTML từ 1 URL qua curl_cffi, cloudscraper, requests hoặc cổng Proxy dự phòng."""
-        headers = cls._get_headers(url)
-
-        # 1. Thử bằng curl_cffi giả lập trình duyệt thật
-        if cffi_requests is not None:
-            if cls._cffi_session is None:
-                cls._cffi_session = cffi_requests.Session()
-            for browser_fp in ["chrome124", "safari17_0", "chrome120"]:
-                try:
-                    resp = cls._cffi_session.get(
-                        url,
-                        headers=headers,
-                        impersonate=browser_fp,
-                        timeout=timeout,
-                    )
-                    if resp.status_code == 200 and resp.text and len(resp.text) > 1000:
-                        return resp.text
-                except Exception:
-                    continue
-
-        # 2. Thử bằng Cloudscraper
-        if cloudscraper is not None:
-            try:
-                scraper = cloudscraper.create_scraper(
-                    browser={"browser": "chrome", "platform": "windows", "mobile": False}
-                )
-                resp = scraper.get(url, headers=headers, timeout=timeout)
-                if resp.status_code == 200 and resp.text and len(resp.text) > 1000:
-                    resp.encoding = resp.apparent_encoding or "utf-8"
-                    return resp.text
-            except Exception:
-                pass
-
-        # 3. Thử bằng Requests chuẩn
-        try:
-            if cls._req_session is None:
-                cls._req_session = requests.Session()
-            resp = cls._req_session.get(url, headers=headers, timeout=timeout)
-            if resp.status_code == 200 and resp.text and len(resp.text) > 1000:
-                resp.encoding = resp.apparent_encoding or "utf-8"
-                return resp.text
-        except Exception:
-            pass
-
-        # 4. Thử qua cổng Proxy trung gian nếu IP máy chủ bị chặn
-        encoded_url = quote(url, safe="")
-        proxy_urls = [
-            f"https://api.allorigins.win/raw?url={encoded_url}",
-            f"https://api.codetabs.com/v1/proxy?quest={encoded_url}",
-            f"https://corsproxy.io/?{encoded_url}",
-        ]
-        for p_url in proxy_urls:
-            try:
-                resp = requests.get(p_url, headers=headers, timeout=timeout)
-                if resp.status_code == 200 and resp.text and len(resp.text) > 1000:
-                    resp.encoding = "utf-8"
-                    return resp.text
-            except Exception:
-                continue
-
-        return ""
-
-    @classmethod
-    def _build_mirror_urls(cls, original_url: str) -> Tuple[str, List[str]]:
-        """
-        Tách tên truyện (slug) và số chương từ URL gốc để tạo danh sách link
-        Kho Truyện Dự Phòng (truyenfull.vision, truyenfull.io, truyenfull.vn, sstruyen.vn...).
-        """
-        m = re.search(
-            r"/(?:doc-truyen/|truyen/)?([a-zA-Z0-9-]+)/(?:chuong|chapter)-(\d+)",
-            original_url,
-            re.I,
+        parsed = urlparse(url)
+        if not parsed.netloc:
+            return ""
+        dashed_host = parsed.netloc.replace("-", "--").replace(".", "-")
+        path_part = parsed.path or "/"
+        query_part = f"&{parsed.query}" if parsed.query else ""
+        return (
+            f"https://{dashed_host}.translate.goog{path_part}"
+            f"?_x_tr_sl=es&_x_tr_tl=vi&_x_tr_hl=vi&_x_tr_pto=wapp{query_part}"
         )
-        if not m:
-            return "", []
-
-        novel_slug = m.group(1).lower().strip()
-        chap_num = m.group(2).strip()
-
-        mirror_list = [
-            f"https://truyenfull.vision/{novel_slug}/chuong-{chap_num}/",
-            f"https://truyenfull.io/{novel_slug}/chuong-{chap_num}/",
-            f"https://truyenfull.vn/{novel_slug}/chuong-{chap_num}/",
-            f"https://truyenfull.bio/{novel_slug}/chuong-{chap_num}/",
-            f"https://sstruyen.vn/{novel_slug}/chuong-{chap_num}/",
-            f"https://truyenchu.vn/{novel_slug}/chuong-{chap_num}",
-        ]
-
-        preferred_domain = cls._working_mirror_cache.get(novel_slug)
-        if preferred_domain:
-            preferred_url = f"{preferred_domain}/{novel_slug}/chuong-{chap_num}/"
-            if preferred_url in mirror_list:
-                mirror_list.remove(preferred_url)
-            mirror_list.insert(0, preferred_url)
-
-        return novel_slug, mirror_list
-
-    @classmethod
-    def _compute_fallback_nav_links(cls, url: str) -> Tuple[Optional[str], Optional[str]]:
-        """Tính toán chính xác link Chương Trước & Chương Tiếp theo cấu trúc URL gốc của người dùng."""
-        prev_url: Optional[str] = None
-        next_url: Optional[str] = None
-        match = re.search(r"(chuong-|chapter-)(\d+)([^/\d]*)$", url, re.I)
-        if match:
-            prefix, num_str, suffix = match.groups()
-            chap_num = int(num_str)
-            base_prefix = url[: match.start()]
-            next_url = f"{base_prefix}{prefix}{chap_num + 1}{suffix}"
-            if chap_num > 1:
-                prev_url = f"{base_prefix}{prefix}{chap_num - 1}{suffix}"
-        return prev_url, next_url
-
-    @classmethod
-    def _fetch_via_jina_headless(cls, url: str, timeout: int = 18) -> Optional[Tuple[str, List[str]]]:
-        """Sử dụng trình duyệt ảo Jina Headless Chrome (chỉ chấp nhận nếu vượt qua được màn hình bảo mật)."""
-        jina_url = f"https://r.jina.ai/{url}"
-        try:
-            headers = {
-                "User-Agent": random.choice(cls.USER_AGENTS),
-                "Accept": "text/plain",
-                "X-No-Cache": "true",
-            }
-            resp = requests.get(jina_url, headers=headers, timeout=timeout)
-            if resp.status_code != 200 or not resp.text:
-                return None
-
-            raw_text = resp.text
-            title = "Chương truyện"
-            m_title = re.search(r"^Title:\s*(.+)$", raw_text, re.M)
-            if m_title:
-                title = re.split(r"\s*[-|]\s*", m_title.group(1).strip())[0].strip()
-
-            if "Markdown Content:" in raw_text:
-                raw_text = raw_text.split("Markdown Content:", 1)[1]
-
-            cleaned = cls._clean_text(raw_text)
-            if (
-                len(cleaned) >= cls.MIN_VALID_CHAPTER_CHARS
-                and cls._count_vn_accents(cleaned) >= cls.MIN_VALID_VN_ACCENTS
-            ):
-                chunks = cls.split_into_chunks(cleaned, max_chars=450)
-                if chunks:
-                    if not chunks[0].lower().startswith(title.lower()):
-                        chunks.insert(0, f"{title}.")
-                    return title, chunks
-        except Exception:
-            pass
-        return None
 
     @classmethod
     def _extract_cover_from_soup(cls, soup: BeautifulSoup, base_url: str) -> str:
-        """Tìm link ảnh bìa từ thẻ meta og:image hoặc các class ảnh bìa phổ biến."""
+        """Lấy ảnh bìa truyện trực tiếp từ trang hiện tại (không gửi thêm request phụ gây chặn IP)."""
         try:
             cover_selectors = [
                 ".book-img img",
@@ -345,7 +159,7 @@ class NovelScraper:
                 img = soup.select_one(sel)
                 if cls._is_alive_tag(img):
                     src = str(img.attrs.get("data-src") or img.attrs.get("src") or "").strip()
-                    if src and not src.startswith("data:"):
+                    if src and not src.startswith("data:") and "translate.goog" not in src:
                         return urljoin(base_url, src)
 
             for meta_sel in [
@@ -364,44 +178,27 @@ class NovelScraper:
         return ""
 
     @classmethod
-    def extract_novel_cover(cls, chapter_soup: Optional[BeautifulSoup], chapter_url: str) -> str:
-        """Trích xuất ảnh bìa và lưu đệm theo tên truyện."""
-        novel_base_url = re.sub(r"/(?:chuong|chapter)-\d+.*$", "", chapter_url, flags=re.I)
-        if novel_base_url in cls._cover_cache and cls._cover_cache[novel_base_url]:
-            return cls._cover_cache[novel_base_url]
-
-        cover_url = ""
-        if chapter_soup is not None:
-            cover_url = cls._extract_cover_from_soup(chapter_soup, chapter_url)
-
-        if not cover_url and novel_base_url != chapter_url:
-            try:
-                novel_html = cls._raw_http_get(novel_base_url, timeout=6)
-                if novel_html:
-                    novel_soup = BeautifulSoup(novel_html, "lxml")
-                    cover_url = cls._extract_cover_from_soup(novel_soup, novel_base_url)
-            except Exception:
-                pass
-
-        if cover_url:
-            cls._cover_cache[novel_base_url] = cover_url
-        return cover_url
-
-    @classmethod
-    def _extract_dom_chapter(
+    def _extract_valid_chapter_from_html(
         cls, html_text: str, url: str
     ) -> Optional[Tuple[str, List[str], Optional[str], Optional[str], str]]:
         """
-        Phân tích HTML thành (title, chunks, prev_url, next_url, cover_url).
-        Nếu phát hiện trang 'Đang kiểm tra linh căn đạo hữu' hoặc nội dung ngắn < 1000 ký tự,
-        trả về None ngay lập tức để chuyển sang Kho Truyện Dự Phòng.
+        Phân tích mã HTML của trang và kiểm tra nghiêm ngặt:
+        - Nếu trang đang dừng ở màn hình 'Đang kiểm tra linh căn đạo hữu' hoặc 'Chữ tượng hình',
+          hàm sẽ trả về None để hệ thống tự động chuyển sang lớp tải tiếp theo.
         """
-        if not html_text or len(html_text) < 1000:
+        if not html_text or not isinstance(html_text, str) or len(html_text) < 800:
             return None
 
         soup = BeautifulSoup(html_text, "lxml")
+
         prev_url, next_url = cls._extract_nav_links(soup, url)
-        cover_url = cls.extract_novel_cover(soup, url)
+
+        novel_base_url = re.sub(r"/(?:chuong|chapter)-\d+.*$", "", url, flags=re.I)
+        cover_url = cls._extract_cover_from_soup(soup, url)
+        if cover_url:
+            cls._cover_cache[novel_base_url] = cover_url
+        else:
+            cover_url = cls._cover_cache.get(novel_base_url, "")
 
         for tag in list(
             soup(["script", "style", "nav", "footer", "iframe", "noscript", "aside", "form", "svg", "canvas"])
@@ -418,22 +215,27 @@ class NovelScraper:
         for junk_div in list(
             soup.find_all(
                 attrs={
-                    "class": re.compile(r"(ads|advert|banner|nav|pagination|comment|social|breadcrumb)", re.I)
+                    "class": re.compile(
+                        r"(ads|advert|banner|nav|pagination|comment|social|breadcrumb|modal|dialog|drawer)",
+                        re.I,
+                    )
                 }
             )
         ):
             if cls._is_alive_tag(junk_div):
-                junk_div.decompose()
+                # Chỉ xóa nếu thẻ đó không chứa toàn bộ chương truyện
+                if cls._count_vn_accents(junk_div.get_text()) < 250:
+                    junk_div.decompose()
 
-        # Tìm khung chứa nội dung chương truyện thật (phải có ít nhất 180 chữ Tiếng Việt có dấu)
+        # Tìm khung chứa nội dung chương truyện thật
         content_node = None
         for selector in cls.CONTENT_SELECTORS:
             node = soup.select_one(selector)
             if cls._is_alive_tag(node):
-                cleaned_candidate = cls._clean_text(node.get_text("\n"))
+                candidate_text = cls._clean_text(node.get_text("\n"))
                 if (
-                    len(cleaned_candidate) >= cls.MIN_VALID_CHAPTER_CHARS
-                    and cls._count_vn_accents(cleaned_candidate) >= cls.MIN_VALID_VN_ACCENTS
+                    len(candidate_text) >= cls.MIN_VALID_CHAPTER_CHARS
+                    and cls._count_vn_accents(candidate_text) >= cls.MIN_VALID_VN_ACCENTS
                 ):
                     content_node = node
                     break
@@ -443,13 +245,13 @@ class NovelScraper:
             for div in soup.find_all(["article", "main", "section", "div"]):
                 if not cls._is_alive_tag(div):
                     continue
-                cleaned_candidate = cls._clean_text(div.get_text("\n"))
-                vn_score = cls._count_vn_accents(cleaned_candidate)
+                candidate_text = cls._clean_text(div.get_text("\n"))
+                vn_score = cls._count_vn_accents(candidate_text)
                 if (
-                    len(cleaned_candidate) >= cls.MIN_VALID_CHAPTER_CHARS
+                    len(candidate_text) >= cls.MIN_VALID_CHAPTER_CHARS
                     and vn_score >= cls.MIN_VALID_VN_ACCENTS
                 ):
-                    candidates.append((vn_score, len(cleaned_candidate), div))
+                    candidates.append((vn_score, len(candidate_text), div))
 
             if candidates:
                 max_vn_score = max(c[0] for c in candidates)
@@ -484,65 +286,167 @@ class NovelScraper:
         return title, chunks, prev_url, next_url, cover_url
 
     @classmethod
-    def _fetch_from_mirrors_or_jina(
-        cls, original_url: str, fallback_title: str = "", fallback_cover: str = ""
-    ) -> Tuple[str, List[str], Optional[str], Optional[str], str]:
+    def _fetch_via_jina_same_url(
+        cls, url: str, timeout: int = 22
+    ) -> Optional[Tuple[str, List[str], Optional[str], Optional[str], str]]:
         """
-        Tự động lấy nội dung chương từ hệ thống Kho Truyện Dự Phòng (TruyenFull / SSTruyen / TruyenChu)
-        khi truyendich.space bật màn hình 'Đang kiểm tra linh căn đạo hữu'.
+        Dùng trình duyệt Chrome ảo (Jina Headless Browser) mở ĐÚNG đường dẫn URL của người dùng,
+        chờ JavaScript chạy qua màn hình 'Quá trình này diễn ra tự động' rồi lấy nội dung.
         """
-        fallback_prev, fallback_next = cls._compute_fallback_nav_links(original_url)
-        cover_url = fallback_cover or cls.extract_novel_cover(None, original_url)
+        jina_url = f"https://r.jina.ai/{url}"
 
-        novel_slug, mirror_urls = cls._build_mirror_urls(original_url)
-        for m_url in mirror_urls:
-            html = cls._raw_http_get(m_url, timeout=12)
-            if not html:
+        # Thử chế độ trả về HTML đã render xong JavaScript
+        for return_format in ["html", "text"]:
+            try:
+                headers = {
+                    "Accept": "text/plain",
+                    "X-Return-Format": return_format,
+                    "X-Timeout": "20",
+                    "X-No-Cache": "true",
+                }
+                resp = requests.get(jina_url, headers=headers, timeout=timeout)
+                if resp.status_code != 200 or not resp.text:
+                    continue
+
+                if return_format == "html":
+                    parsed = cls._extract_valid_chapter_from_html(resp.text, url)
+                    if parsed is not None:
+                        return parsed
+                else:
+                    raw_text = resp.text
+                    title = ""
+                    m_title = re.search(r"^Title:\s*(.+)$", raw_text, re.M)
+                    if m_title:
+                        title = re.split(r"\s*[-|]\s*", m_title.group(1).strip())[0].strip()
+
+                    if "Markdown Content:" in raw_text:
+                        raw_text = raw_text.split("Markdown Content:", 1)[1]
+
+                    cleaned = cls._clean_text(raw_text)
+                    if (
+                        len(cleaned) >= cls.MIN_VALID_CHAPTER_CHARS
+                        and cls._count_vn_accents(cleaned) >= cls.MIN_VALID_VN_ACCENTS
+                    ):
+                        prev_url, next_url = cls._compute_fallback_nav_links(url)
+                        novel_base_url = re.sub(r"/(?:chuong|chapter)-\d+.*$", "", url, flags=re.I)
+                        cover_url = cls._cover_cache.get(novel_base_url, "")
+                        if not title or "xác thực" in title.lower():
+                            m_url = re.search(r"(?:chuong|chapter)-(\d+)", url, re.I)
+                            title = f"Chương {m_url.group(1)}" if m_url else "Chương truyện"
+
+                        chunks = cls.split_into_chunks(cleaned, max_chars=450)
+                        if chunks and not chunks[0].lower().startswith(title.lower()):
+                            chunks.insert(0, f"{title}.")
+                        return title, chunks, prev_url, next_url, cover_url
+            except Exception:
                 continue
 
-            parsed = cls._extract_dom_chapter(html, m_url)
-            if parsed is not None:
-                m_title, m_chunks, m_prev, m_next, m_cover = parsed
-                domain_match = re.match(r"^(https?://[^/]+)", m_url)
-                if domain_match and novel_slug:
-                    cls._working_mirror_cache[novel_slug] = domain_match.group(1)
+        return None
 
-                final_title = (
-                    fallback_title
-                    if (fallback_title and fallback_title != "Chương truyện")
-                    else m_title
-                )
-                final_cover = cover_url or m_cover
-                if final_cover:
-                    novel_base = re.sub(r"/(?:chuong|chapter)-\d+.*$", "", original_url, flags=re.I)
-                    cls._cover_cache[novel_base] = final_cover
+    @classmethod
+    def fetch_chapter(
+        cls, url: str, timeout: int = 20
+    ) -> Tuple[str, List[str], Optional[str], Optional[str], str]:
+        """
+        Tải và bóc tách chương truyện CHỈ TỪ ĐÚNG URL ĐƯỢC CUNG CẤP.
+        Tự động đi qua 5 lớp kết nối khác nhau trên cùng URL đó cho đến khi lấy được
+        nội dung Tiếng Việt thật (bỏ qua màn hình kiểm tra linh căn & chữ tượng hình).
+        """
+        parsed_url = urlparse(url)
+        origin_referer = f"{parsed_url.scheme}://{parsed_url.netloc}/" if parsed_url.netloc else "https://www.google.com.vn/"
 
-                # Đồng bộ lại tiêu đề ở câu đầu tiên nếu cần
-                if m_chunks and final_title:
-                    m_chunks[0] = re.sub(r"^Chương\s+\d+[^.]*\.", f"{final_title}.", m_chunks[0], count=1)
+        # LỚP 1: curl_cffi với chữ ký gốc 100% (KHÔNG ghi đè User-Agent để tránh lệch Fingerprint)
+        if cffi_requests is not None:
+            native_Headers = {
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Referer": origin_referer,
+                "Upgrade-Insecure-Requests": "1",
+            }
+            for browser_fp in ["chrome120", "chrome124", "safari17_0", "edge101"]:
+                try:
+                    if browser_fp not in cls._cffi_sessions:
+                        cls._cffi_sessions[browser_fp] = cffi_requests.Session()
 
-                return (
-                    final_title,
-                    m_chunks,
-                    fallback_prev or m_prev,
-                    fallback_next or m_next,
-                    final_cover,
-                )
+                    resp = cls._cffi_sessions[browser_fp].get(
+                        url,
+                        headers=native_Headers,
+                        impersonate=browser_fp,
+                        timeout=14,
+                    )
+                    if resp.status_code == 200 and resp.text:
+                        parsed = cls._extract_valid_chapter_from_html(resp.text, url)
+                        if parsed is not None:
+                            return parsed
+                    # Nếu phiên hiện tại bị dính màn hình kiểm tra linh căn hoặc 403 -> Tạo phiên mới sạch sẽ
+                    cls._cffi_sessions[browser_fp] = cffi_requests.Session()
+                except Exception:
+                    cls._cffi_sessions.pop(browser_fp, None)
+                    continue
 
-        # Dự phòng cuối qua Jina Headless Chrome
-        jina_res = cls._fetch_via_jina_headless(original_url, timeout=18)
-        if jina_res is not None:
-            j_title, j_chunks = jina_res
-            return (
-                fallback_title or j_title,
-                j_chunks,
-                fallback_prev,
-                fallback_next,
-                cover_url,
-            )
+        # LỚP 2: Cloudscraper (Giả lập Chrome trên Windows & iOS)
+        if cloudscraper is not None:
+            for platform_cfg in [
+                {"browser": "chrome", "platform": "windows", "mobile": False},
+                {"browser": "chrome", "platform": "ios", "mobile": True},
+            ]:
+                try:
+                    scraper = cloudscraper.create_scraper(browser=platform_cfg)
+                    resp = scraper.get(
+                        url,
+                        headers={"Accept-Language": "vi-VN,vi;q=0.9", "Referer": origin_referer},
+                        timeout=14,
+                    )
+                    if resp.status_code == 200 and resp.text:
+                        resp.encoding = resp.apparent_encoding or "utf-8"
+                        parsed = cls._extract_valid_chapter_from_html(resp.text, url)
+                        if parsed is not None:
+                            return parsed
+                except Exception:
+                    continue
+
+        # LỚP 3: Google Translate Website Proxy cho ĐÚNG URL GỐC (Đi qua dải IP của Google)
+        gtrans_url = cls._build_google_translate_proxy_url(url)
+        if gtrans_url:
+            try:
+                if cffi_requests is not None:
+                    resp = cffi_requests.get(gtrans_url, impersonate="chrome120", timeout=15)
+                else:
+                    resp = requests.get(gtrans_url, headers=cls.STANDARD_HEADERS, timeout=15)
+
+                if resp.status_code == 200 and resp.text:
+                    parsed = cls._extract_valid_chapter_from_html(resp.text, url)
+                    if parsed is not None:
+                        return parsed
+            except Exception:
+                pass
+
+        # LỚP 4: Cổng Proxy AllOrigins / CodeTabs / CorsProxy cho ĐÚNG URL GỐC
+        encoded_url = quote(url, safe="")
+        proxy_gateways = [
+            f"https://api.allorigins.win/raw?url={encoded_url}",
+            f"https://api.codetabs.com/v1/proxy?quest={encoded_url}",
+            f"https://corsproxy.io/?{encoded_url}",
+        ]
+        for p_url in proxy_gateways:
+            try:
+                resp = requests.get(p_url, headers=cls.STANDARD_HEADERS, timeout=14)
+                if resp.status_code == 200 and resp.text:
+                    resp.encoding = "utf-8"
+                    parsed = cls._extract_valid_chapter_from_html(resp.text, url)
+                    if parsed is not None:
+                        return parsed
+            except Exception:
+                continue
+
+        # LỚP 5: Trình duyệt Chrome ảo Jina Headless Browser chạy JavaScript trên ĐÚNG URL GỐC
+        jina_parsed = cls._fetch_via_jina_same_url(url, timeout=22)
+        if jina_parsed is not None:
+            return jina_parsed
 
         raise ValueError(
-            f"Không thể tải chương truyện từ cả trang gốc lẫn kho dự phòng cho URL: {original_url}"
+            f"Trang web tại {url} đang tạm khóa kết nối tự động (Kiểm tra linh căn / 403). "
+            f"Vui lòng đợi khoảng 5-10 giây rồi bấm Tải chương lại!"
         )
 
     @classmethod
@@ -550,61 +454,28 @@ class NovelScraper:
         cls, html_text: str, url: str
     ) -> Tuple[str, List[str], Optional[str], Optional[str], str]:
         """
-        Phân tích mã HTML do trình duyệt gửi lên. Nếu HTML là màn hình 'Đang kiểm tra linh căn',
-        lập tức lấy tiêu đề + ảnh bìa rồi tự động tải nội dung thật từ Kho Truyện Dự Phòng.
+        Kiểm tra mã HTML do trình duyệt gửi lên.
+        Nếu HTML đó bị dính màn hình 'Đang kiểm tra linh căn đạo hữu' hoặc chữ tượng hình,
+        tự động gọi fetch_chapter(url) để tải lại từ chính URL gốc đó bằng 5 lớp bảo vệ.
         """
-        fallback_title = ""
-        fallback_cover = ""
-        if html_text:
-            try:
-                temp_soup = BeautifulSoup(html_text, "lxml")
-                fallback_title = cls._extract_chapter_title(temp_soup, url)
-                fallback_cover = cls.extract_novel_cover(temp_soup, url)
-            except Exception:
-                pass
-
-        parsed = cls._extract_dom_chapter(html_text, url)
+        parsed = cls._extract_valid_chapter_from_html(html_text, url)
         if parsed is not None:
             return parsed
-
-        return cls._fetch_from_mirrors_or_jina(url, fallback_title=fallback_title, fallback_cover=fallback_cover)
+        return cls.fetch_chapter(url)
 
     @classmethod
-    def fetch_chapter(
-        cls, url: str, timeout: int = 20
-    ) -> Tuple[str, List[str], Optional[str], Optional[str], str]:
-        """
-        Tải trang web và bóc tách nội dung chương truyện.
-        Tự động vượt qua màn hình 'Đang kiểm tra linh căn đạo hữu' bằng Kho Truyện Dự Phòng.
-        """
-        novel_slug, _ = cls._build_mirror_urls(url)
-
-        # Nếu bộ truyện này đang bị trang gốc khóa bằng màn hình bảo mật -> Lấy thẳng từ kho dự phòng
-        if novel_slug and novel_slug in cls._working_mirror_cache:
-            try:
-                return cls._fetch_from_mirrors_or_jina(url)
-            except Exception:
-                pass
-
-        fallback_title = ""
-        fallback_cover = ""
-        html_text = cls._raw_http_get(url, timeout=8)
-        if html_text:
-            try:
-                temp_soup = BeautifulSoup(html_text, "lxml")
-                fallback_title = cls._extract_chapter_title(temp_soup, url)
-                fallback_cover = cls.extract_novel_cover(temp_soup, url)
-            except Exception:
-                pass
-
-            if cls._has_valid_vietnamese_chapter(html_text):
-                parsed = cls._extract_dom_chapter(html_text, url)
-                if parsed is not None:
-                    return parsed
-
-        return cls._fetch_from_mirrors_or_jina(
-            url, fallback_title=fallback_title, fallback_cover=fallback_cover
-        )
+    def _compute_fallback_nav_links(cls, url: str) -> Tuple[Optional[str], Optional[str]]:
+        prev_url: Optional[str] = None
+        next_url: Optional[str] = None
+        match = re.search(r"(chuong-|chapter-)(\d+)([^/\d]*)$", url, re.I)
+        if match:
+            prefix, num_str, suffix = match.groups()
+            chap_num = int(num_str)
+            base_prefix = url[: match.start()]
+            next_url = f"{base_prefix}{prefix}{chap_num + 1}{suffix}"
+            if chap_num > 1:
+                prev_url = f"{base_prefix}{prefix}{chap_num - 1}{suffix}"
+        return prev_url, next_url
 
     @classmethod
     def _extract_chapter_title(cls, soup: BeautifulSoup, url: str) -> str:
@@ -621,14 +492,14 @@ class NovelScraper:
 
         chap_name = ""
         title_selectors = [
-            ".chapter-title",
-            "#chapter-title",
-            ".chap-title",
-            "h2.chapter-title",
             "article h1",
             "main h1",
             "header h1",
+            ".chapter-title",
+            "#chapter-title",
+            ".chap-title",
             "h1",
+            "h2.chapter-title",
         ]
         for sel in title_selectors:
             node = soup.select_one(sel)
@@ -639,6 +510,7 @@ class NovelScraper:
                     and len(text) > 1
                     and not cls._is_trap_or_garbled_line(text)
                     and "xác thực bảo mật" not in text.lower()
+                    and "kiểm tra linh căn" not in text.lower()
                 ):
                     chap_name = text
                     break
@@ -653,7 +525,7 @@ class NovelScraper:
 
         if soup.title and soup.title.get_text(strip=True):
             raw_title = soup.title.get_text(strip=True)
-            clean_t = re.split(r"\s*[-|]\s*", raw_title)[0].strip()
+            clean_t = re.split(r"\s*[|-]\s*", raw_title)[0].strip()
             if clean_t and "xác thực" not in clean_t.lower() and "just a moment" not in clean_t.lower():
                 return clean_t
 
@@ -686,6 +558,9 @@ class NovelScraper:
             href = str(attrs.get("href") or "").strip()
             if not href or href.startswith("#") or href.lower().startswith("javascript:"):
                 return None
+            # Không lấy link bị biến đổi sang translate.goog làm link chuyển chương
+            if "translate.goog" in href:
+                return None
             return urljoin(base_url, href)
 
         prev_selectors = ["#prev_chap", "a.prev-chap", "a.btn-prev", "a[rel='prev']"]
@@ -703,6 +578,25 @@ class NovelScraper:
                 next_url = link
                 break
 
+        if not prev_url or not next_url:
+            for a_tag in soup.find_all("a", href=True):
+                valid_link = _is_valid_href(a_tag)
+                if not valid_link:
+                    continue
+
+                text = a_tag.get_text(" ", strip=True).lower()
+                title_attr = str(a_tag.attrs.get("title") or "").lower()
+                combined = f"{text} {title_attr}"
+
+                if not next_url and re.search(
+                    r"(chương\s+tiếp|chương\s+sau|tiếp\s+theo|next\s+chapter)", combined
+                ):
+                    next_url = valid_link
+                elif not prev_url and re.search(
+                    r"(chương\s+trước|trước\s+đó|prev\s+chapter)", combined
+                ):
+                    prev_url = valid_link
+
         if not next_url or not prev_url:
             fallback_prev, fallback_next = cls._compute_fallback_nav_links(base_url)
             prev_url = prev_url or fallback_prev
@@ -712,7 +606,12 @@ class NovelScraper:
 
     @classmethod
     def _clean_text(cls, text: str) -> str:
-        """Làm sạch từng dòng văn bản, xóa sạch thông báo chặn Bot và chữ tượng hình."""
+        """
+        Làm sạch văn bản:
+        - Xóa mọi cụm chữ thông báo 'Xác thực bảo mật / Đang kiểm tra linh căn đạo hữu'
+          (kể cả khi bị gộp chung trên 1 dòng).
+        - Xóa sạch toàn bộ chữ tượng hình Ai Cập và ký tự rác.
+        """
         if not text or not isinstance(text, str):
             return ""
 
@@ -720,6 +619,14 @@ class NovelScraper:
         cleaned_lines = []
 
         for raw_line in lines:
+            raw_line = raw_line.strip()
+            if not raw_line:
+                continue
+
+            # Xóa trực tiếp các cụm từ giao diện / bảo mật nếu bị dính trên cùng dòng
+            for ui_pattern in cls.INLINE_UI_JUNK:
+                raw_line = re.sub(ui_pattern, " ", raw_line)
+
             raw_line = raw_line.strip()
             if not raw_line:
                 continue
@@ -741,7 +648,7 @@ class NovelScraper:
             if not line:
                 continue
 
-            is_junk = any(re.search(pattern, line) for pattern in cls.JUNK_PATTERNS)
+            is_junk = any(re.search(pattern, line) for pattern in cls.JUNK_LINE_PATTERNS)
             if not is_junk:
                 cleaned_lines.append(line)
 
