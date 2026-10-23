@@ -72,16 +72,18 @@
             position: relative;
         }
 
-        .sidebar-backdrop {
+        .sidebar-backdrop, .modal-backdrop {
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(0, 0, 0, 0.65);
             z-index: 998;
         }
 
-        .sidebar-backdrop.show {
-            display: block;
+        .sidebar-backdrop.show, .modal-backdrop.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         /* ================= 1. SIDEBAR (LỊCH SỬ ĐỒNG BỘ) ================= */
@@ -309,6 +311,11 @@
             white-space: nowrap;
         }
 
+        .btn-secondary.active-ai {
+            border-color: #10b981;
+            color: #10b981;
+        }
+
         .btn-secondary:disabled {
             opacity: 0.35;
             cursor: not-allowed;
@@ -461,6 +468,79 @@
             text-overflow: ellipsis;
         }
 
+        /* ================= MODAL CÀI ĐẶT SỬA DẤU AI & TỪ ĐIỂN ================= */
+        .modal-box {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            width: 94%;
+            max-width: 500px;
+            padding: 18px;
+            max-height: 86vh;
+            overflow-y: auto;
+            color: var(--text-primary);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .setting-card {
+            background-color: var(--bg-elevated);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .mini-input {
+            flex: 1;
+            min-width: 0;
+            background-color: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 7px;
+            padding: 7px 10px;
+            font-size: 12.5px;
+            outline: none;
+        }
+
+        .item-list {
+            max-height: 125px;
+            overflow-y: auto;
+            background-color: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 6px;
+        }
+
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 8px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 12px;
+        }
+
+        .item-row:last-child {
+            border-bottom: none;
+        }
+
         @media (max-width: 768px) {
             .sidebar {
                 position: fixed;
@@ -549,6 +629,10 @@
                 <div id="chapterTitle" class="chapter-title">Chưa tải chương truyện</div>
 
                 <div class="nav-controls">
+                    <button id="aiSettingBtn" class="btn-secondary" onclick="openModal('aiModal')">
+                        🧠 <span id="aiBtnLabel">Sửa dấu AI</span>
+                    </button>
+
                     <button id="prevChapBtn" class="btn-secondary" disabled onclick="goPrevChapter()">⏮ Trước</button>
                     <button id="nextChapBtn" class="btn-secondary" disabled onclick="goNextChapter()">Tiếp ⏭</button>
 
@@ -568,8 +652,8 @@
             <div class="chunk-item">
                 <b>Hướng dẫn sử dụng nhanh:</b><br><br>
                 1. Dán link chương truyện vào ô phía trên rồi nhấn <b>"⬇ Tải"</b> hoặc mở <b>"☰ Tủ sách"</b> để chọn lại chương đang nghe dở.<br>
-                2. Chạm trực tiếp vào bất kỳ đoạn văn nào để giọng đọc bắt đầu đọc từ đoạn đó.<br>
-                3. Lịch sử và vị trí câu đang nghe dở được tự động đồng bộ giữa Điện thoại và Laptop.
+                2. Hệ thống đã tích hợp sẵn bộ lọc ngữ cảnh sửa ngay các từ lỗi dấu như <i>nao khi ➔ não khỉ, con khi ➔ con khỉ, ngoan ngoản ➔ ngoan ngoãn, thán khí ➔ Thánh khí</i>.<br>
+                3. Nhấn vào nút <b>"🧠 Sửa dấu AI"</b> phía trên để bật chế độ AI đọc hiểu ngữ cảnh tự động và thêm từ vào Từ điển riêng của bạn.
             </div>
         </div>
 
@@ -616,6 +700,60 @@
         </div>
     </main>
 
+    <!-- ================= MODAL CÀI ĐẶT SỬA DẤU AI & TỪ ĐIỂN NGỮ CẢNH ================= -->
+    <div id="aiModal" class="modal-backdrop" onclick="if(event.target===this) closeModal('aiModal')">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>🧠 Sửa dấu theo Ngữ cảnh & Từ điển</span>
+                <button class="btn-secondary" onclick="closeModal('aiModal')">✕</button>
+            </div>
+
+            <!-- 1. Công tắc Bật/Tắt AI cố định -->
+            <div class="setting-card">
+                <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; gap:10px;">
+                    <div>
+                        <b style="font-size:13.5px;">✨ Tự động dùng AI sửa dấu & từ lỗi (Mọi chương)</b>
+                        <div style="font-size:11.5px; color:var(--text-secondary); margin-top:3px;">
+                            AI chạy ngầm từng lô 8 câu để khôi phục từ mất dấu (VD: <i>nao khi ➔ não khỉ</i>) mà không làm chậm tốc độ tải chương.
+                        </div>
+                    </div>
+                    <input type="checkbox" id="autoAIToggle" style="width:20px; height:20px; cursor:pointer;" onchange="onToggleAutoAI(this.checked)" />
+                </label>
+            </div>
+
+            <!-- 2. Quản lý nhiều Gemini API Key -->
+            <div style="margin-bottom:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:12.5px; font-weight:700;">
+                    <span>🔑 Danh sách Gemini API Key (Tự xoay vòng):</span>
+                    <span id="keyCountLabel" style="color:var(--accent);">0 Key</span>
+                </div>
+                <div class="input-row">
+                    <input
+                        type="text"
+                        id="newKeyInput"
+                        class="mini-input"
+                        placeholder="Dán 1 hoặc nhiều API Key (cách nhau dấu phẩy)..."
+                    />
+                    <button class="btn-primary" style="height:34px;" onclick="addApiKeys()">+ Thêm Key</button>
+                </div>
+                <div id="keyListContainer" class="item-list"></div>
+            </div>
+
+            <!-- 3. Từ điển sửa từ nhanh (Chạy tức thì không cần AI) -->
+            <div style="padding-top:10px; border-top:1px solid var(--border-color);">
+                <div style="font-size:12.5px; font-weight:700; margin-bottom:6px;">
+                    📖 Từ điển sửa cụm từ tức thì (Áp dụng ngay khi tải):
+                </div>
+                <div class="input-row">
+                    <input type="text" id="dictWrongInput" class="mini-input" placeholder="Từ bị lỗi (VD: nao khi)" />
+                    <input type="text" id="dictRightInput" class="mini-input" placeholder="Sửa thành (VD: não khỉ)" />
+                    <button class="btn-secondary" style="height:34px;" onclick="addDictEntry()">+ Thêm</button>
+                </div>
+                <div id="dictListContainer" class="item-list"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let chunks = [];
         let currentIndex = 0;
@@ -627,15 +765,30 @@
         let prevChapterUrl = null;
         let nextChapterUrl = null;
         let playbackSessionId = 0;
+        let scrapeSessionId = 0;
+        let currentKeyRotationIndex = 0;
         let audioCtx = null;
 
-        // Trạng thái hẹn giờ tắt
         let sleepMode = "0";
         let sleepTimeoutId = null;
 
         const PRELOAD_AHEAD = 5;
         const LOCAL_HISTORY_KEY = "novel_tts_local_history";
         const LOCAL_THEME_KEY = "novel_tts_theme";
+        const LOCAL_DICT_KEY = "novel_tts_custom_dict";
+        const LOCAL_API_KEYS_LIST = "novel_tts_gemini_keys_list";
+        const LOCAL_AUTO_AI_KEY = "novel_tts_auto_ai_enabled";
+
+        const DEFAULT_DICT = {
+            "nao khi": "não khỉ",
+            "ngoan ngoản": "ngoan ngoãn",
+            "lăn tan": "lăn tăn",
+            "vô cũng": "vô cùng",
+            "như vây": "như vậy",
+            "ko": "không",
+            "đc": "được",
+            "vs": "với"
+        };
 
         const audioPlayer = new Audio();
         audioPlayer.playsInline = true;
@@ -644,10 +797,16 @@
 
         window.addEventListener("DOMContentLoaded", () => {
             changeTheme(localStorage.getItem(LOCAL_THEME_KEY) || "dark");
+
+            const savedAutoAI = localStorage.getItem(LOCAL_AUTO_AI_KEY) === "true";
+            document.getElementById("autoAIToggle").checked = savedAutoAI;
+            renderApiKeyList();
+            renderDictList();
+            updateAIButtonBadge();
+
             syncHistoryWithServer();
             setupMediaSession();
 
-            // Giữ kết nối đồng bộ & ngăn máy chủ Render ngủ khi đang phát
             setInterval(() => {
                 if (isPlaying) syncHistoryWithServer(true);
             }, 60000);
@@ -657,6 +816,231 @@
             });
         });
 
+        function openModal(id) { document.getElementById(id).classList.add("show"); }
+        function closeModal(id) { document.getElementById(id).classList.remove("show"); }
+
+        // ================= QUẢN LÝ TỪ ĐIỂN & SỬA DẤU AI THEO NGỮ CẢNH =================
+        function getCustomDict() {
+            try {
+                const raw = localStorage.getItem(LOCAL_DICT_KEY);
+                return raw ? { ...DEFAULT_DICT, ...JSON.parse(raw) } : { ...DEFAULT_DICT };
+            } catch (e) {
+                return { ...DEFAULT_DICT };
+            }
+        }
+
+        function saveCustomDict(dictObj) {
+            localStorage.setItem(LOCAL_DICT_KEY, JSON.stringify(dictObj));
+            renderDictList();
+        }
+
+        function renderDictList() {
+            const container = document.getElementById("dictListContainer");
+            const dict = getCustomDict();
+            container.innerHTML = "";
+            const entries = Object.entries(dict);
+            if (!entries.length) {
+                container.innerHTML = `<div style="color:gray;text-align:center;padding:8px;">Chưa có từ nào.</div>`;
+                return;
+            }
+            entries.forEach(([wrong, right]) => {
+                const row = document.createElement("div");
+                row.className = "item-row";
+                row.innerHTML = `
+                    <span><b>${wrong}</b> ➔ <span style="color:#10b981;font-weight:600;">${right}</span></span>
+                    <button style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-weight:700;" onclick="deleteDictEntry('${wrong}')">✕</button>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function addDictEntry() {
+            const w = document.getElementById("dictWrongInput").value.trim().toLowerCase();
+            const r = document.getElementById("dictRightInput").value.trim();
+            if (!w || !r) return;
+            const dict = getCustomDict();
+            dict[w] = r;
+            saveCustomDict(dict);
+            document.getElementById("dictWrongInput").value = "";
+            document.getElementById("dictRightInput").value = "";
+
+            // Áp dụng ngay lập tức lên chương hiện tại nếu đang mở
+            if (chunks.length > 0) {
+                const regex = new RegExp(`(?<!\\w)${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?!\\w)`, "gi");
+                chunks = chunks.map((c) => c.replace(regex, r));
+                clearPreloadCache();
+                renderChunks();
+                highlightAndScroll(currentIndex);
+            }
+        }
+
+        function deleteDictEntry(word) {
+            const dict = getCustomDict();
+            delete dict[word];
+            saveCustomDict(dict);
+        }
+
+        function getApiKeysList() {
+            try {
+                const raw = localStorage.getItem(LOCAL_API_KEYS_LIST);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) return parsed;
+                }
+            } catch (e) {}
+            return [];
+        }
+
+        function saveApiKeysList(list) {
+            localStorage.setItem(LOCAL_API_KEYS_LIST, JSON.stringify(list));
+            renderApiKeyList();
+            updateAIButtonBadge();
+        }
+
+        function maskKey(k) {
+            return k.length <= 12 ? k : `${k.substring(0, 6)}••••••${k.substring(k.length - 4)}`;
+        }
+
+        function renderApiKeyList() {
+            const container = document.getElementById("keyListContainer");
+            const countLabel = document.getElementById("keyCountLabel");
+            const keys = getApiKeysList();
+            countLabel.innerText = `${keys.length} Key`;
+            container.innerHTML = "";
+
+            if (!keys.length) {
+                container.innerHTML = `<div style="color:gray;text-align:center;padding:8px;">Chưa có API Key nào.</div>`;
+                return;
+            }
+            keys.forEach((k, idx) => {
+                const row = document.createElement("div");
+                row.className = "item-row";
+                row.innerHTML = `
+                    <span><b>Key #${idx + 1}:</b> <code style="margin-left:4px;">${maskKey(k)}</code></span>
+                    <button style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-weight:700;" onclick="removeApiKey(${idx})">✕</button>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function addApiKeys() {
+            const input = document.getElementById("newKeyInput");
+            const raw = input.value.trim();
+            if (!raw) return;
+            const split = raw.split(/[\s,;]+/).map((s) => s.trim()).filter((s) => s.length > 10);
+            if (!split.length) return;
+
+            const list = getApiKeysList();
+            split.forEach((k) => {
+                if (!list.includes(k)) list.push(k);
+            });
+            saveApiKeysList(list);
+            input.value = "";
+
+            const toggle = document.getElementById("autoAIToggle");
+            if (!toggle.checked) {
+                toggle.checked = true;
+                onToggleAutoAI(true);
+            }
+        }
+
+        function removeApiKey(idx) {
+            const list = getApiKeysList();
+            list.splice(idx, 1);
+            saveApiKeysList(list);
+        }
+
+        function onToggleAutoAI(enabled) {
+            localStorage.setItem(LOCAL_AUTO_AI_KEY, enabled ? "true" : "false");
+            updateAIButtonBadge();
+            if (enabled && chunks.length > 0 && getApiKeysList().length > 0) {
+                triggerAutoAIPolishBackground(scrapeSessionId);
+            }
+        }
+
+        function updateAIButtonBadge() {
+            const enabled = document.getElementById("autoAIToggle").checked;
+            const keys = getApiKeysList();
+            const btn = document.getElementById("aiSettingBtn");
+            const label = document.getElementById("aiBtnLabel");
+
+            if (enabled && keys.length > 0) {
+                btn.classList.add("active-ai");
+                label.innerText = `AI Ngữ cảnh: BẬT (${keys.length} Key)`;
+            } else {
+                btn.classList.remove("active-ai");
+                label.innerText = "Sửa dấu AI";
+            }
+        }
+
+        async function triggerAutoAIPolishBackground(activeScrapeId) {
+            const enabled = document.getElementById("autoAIToggle").checked;
+            const keys = getApiKeysList();
+            if (!enabled || keys.length === 0 || !chunks.length) return;
+
+            const label = document.getElementById("aiBtnLabel");
+            const BATCH_SIZE = 8;
+            const totalBatches = Math.ceil(chunks.length / BATCH_SIZE);
+            let lastKeyNum = 1;
+
+            for (let b = 0; b < totalBatches; b++) {
+                if (activeScrapeId !== scrapeSessionId) return;
+
+                const startIdx = b * BATCH_SIZE;
+                const endIdx = Math.min(startIdx + BATCH_SIZE, chunks.length);
+                const batchChunks = chunks.slice(startIdx, endIdx);
+
+                label.innerText = `✨ AI đang sửa (${b + 1}/${totalBatches})...`;
+
+                try {
+                    const res = await fetch("/api/ai-polish", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            chunks: batchChunks,
+                            api_keys: keys,
+                            start_key_index: currentKeyRotationIndex,
+                        }),
+                    });
+                    const data = await res.json();
+
+                    if (activeScrapeId !== scrapeSessionId) return;
+
+                    if (res.ok && Array.isArray(data.chunks) && data.chunks.length === batchChunks.length) {
+                        currentKeyRotationIndex = data.next_key_index || 0;
+                        lastKeyNum = (data.used_key_index ?? 0) + 1;
+
+                        for (let offset = 0; offset < data.chunks.length; offset++) {
+                            const globalIdx = startIdx + offset;
+                            chunks[globalIdx] = data.chunks[offset];
+                            const domChunk = document.getElementById(`chunk_${globalIdx}`);
+                            if (domChunk) domChunk.innerText = data.chunks[offset];
+
+                            // Xóa cache của các câu chưa đọc tới để nạp lại bằng văn bản đã sửa dấu
+                            if (globalIdx > currentIndex || !isPlaying) {
+                                const oldKey = getCacheKey(globalIdx);
+                                if (preloadCache.has(oldKey)) {
+                                    preloadCache.get(oldKey).then((u) => URL.revokeObjectURL(u)).catch(() => {});
+                                    preloadCache.delete(oldKey);
+                                }
+                            }
+                        }
+
+                        if (isPlaying) {
+                            for (let ahead = 1; ahead <= PRELOAD_AHEAD; ahead++) {
+                                schedulePreload(currentIndex + ahead);
+                            }
+                        }
+                    }
+                } catch (e) {}
+            }
+
+            if (activeScrapeId === scrapeSessionId) {
+                label.innerText = `✨ AI Đã sửa (Key #${lastKeyNum})`;
+            }
+        }
+
+        // ================= CÁC HÀM CỐT LÕI =================
         async function pasteClipboard() {
             try {
                 const text = await navigator.clipboard.readText();
@@ -745,7 +1129,6 @@
             document.getElementById("statusLabel").innerText = text;
         }
 
-        // ================= ĐỒNG BỘ LỊCH SỬ 2 CHIỀU =================
         function getLocalHistory() {
             try {
                 return JSON.parse(localStorage.getItem(LOCAL_HISTORY_KEY) || "[]");
@@ -832,7 +1215,6 @@
             } catch (e) {}
         }
 
-        // ================= TẢI CHƯƠNG TRUYỆN =================
         async function startScraping(urlOverride = "", resumeChunkIndex = 0) {
             unlockiOSAudio();
             const urlInput = document.getElementById("urlInput");
@@ -850,6 +1232,7 @@
             stopAudio();
             clearPreloadCache();
 
+            const thisScrapeId = ++scrapeSessionId;
             const fetchBtn = document.getElementById("fetchBtn");
             fetchBtn.disabled = true;
             fetchBtn.innerText = "⏳...";
@@ -861,7 +1244,10 @@
                 const res = await fetch("/api/scrape", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ url: targetUrl }),
+                    body: JSON.stringify({
+                        url: targetUrl,
+                        custom_dict: getCustomDict(),
+                    }),
                 });
                 const data = await res.json();
 
@@ -884,6 +1270,7 @@
                 await syncHistoryWithServer(true);
 
                 playAudio(resumeChunkIndex);
+                triggerAutoAIPolishBackground(thisScrapeId);
             } catch (err) {
                 setStatus("Lỗi tải truyện");
                 alert("Chi tiết lỗi:\n" + err.message);
@@ -993,7 +1380,6 @@
             while (currentIndex < chunks.length && !stopRequested && sessionId === playbackSessionId) {
                 const idx = currentIndex;
 
-                // Tải trước 5 đoạn liên tiếp vào RAM
                 const currentPromise = schedulePreload(idx);
                 for (let ahead = 1; ahead <= PRELOAD_AHEAD; ahead++) {
                     schedulePreload(idx + ahead);
@@ -1038,7 +1424,6 @@
                     }
                 });
 
-                // Giải phóng bộ nhớ của các đoạn cũ đã đọc xong
                 if (idx >= 2) {
                     const oldKey = getCacheKey(idx - 2);
                     if (preloadCache.has(oldKey)) {
